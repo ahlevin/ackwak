@@ -13,6 +13,10 @@ import {
 } from 'lucide-react';
 import { exportToExcel, importFromExcel } from '../excelExport.js';
 import { openPrintView } from '../printView.js';
+import {
+  STATE_TAX_DATA, STATE_LIST, STATE_TAX_DATA_AS_OF,
+  computeStateIncomeTax, topMarginalRate
+} from '../data/stateTaxData.js';
 
 // ============================================================================
 // THEME, editorial financial aesthetic, warm cream + ink + emerald accents
@@ -64,7 +68,7 @@ const BADGE_NEW_RUN = { label: 'New for runway', color: '#B25E00', bg: '#FBEFD9'
 // migrations from the saved version up to current. If anything required
 // user attention, we log it to a warnings array surfaced as a banner.
 
-const CURRENT_SCHEMA_VERSION = 2;
+const CURRENT_SCHEMA_VERSION = 3;
 
 const APP_VERSION = '1.0';
 
@@ -148,6 +152,22 @@ const MIGRATIONS = {
     if (inputs.rentStartAge === undefined) inputs.rentStartAge = null;
     if (inputs.rentEndAge === undefined) inputs.rentEndAge = null;
     return { inputs, warnings };
+  },
+  // v2 -> v3: add stateCode for state-aware tax computation. The user can pick
+  // their state from a dropdown and the calculator runs the right brackets.
+  // The legacy stateRate field is preserved as a manual override option.
+  3: (raw) => {
+    const warnings = [];
+    const inputs = { ...raw };
+    if (inputs.stateCode === undefined) {
+      inputs.stateCode = '';   // empty means "use the manual stateRate"
+    }
+    // useStateBrackets toggles between the bracketed engine and the legacy flat rate.
+    // Default to using brackets if a stateCode is set; flat rate otherwise.
+    if (inputs.useStateBrackets === undefined) {
+      inputs.useStateBrackets = !!inputs.stateCode;
+    }
+    return { inputs, warnings };
   }
 };
 
@@ -216,10 +236,18 @@ function federalTax(taxable, married = false) {
 }
 
 // Approximate total tax: federal + state composite + (payroll if working)
-function estimateTax({ ordinaryIncome = 0, capitalGains = 0, married = false, isWorking = true, stateRate = 0.05 }) {
+// Note: when stateCode is set and useStateBrackets is true, we use the proper
+// bracketed engine; otherwise we fall back to the flat stateRate (legacy behavior
+// + power-user manual override path). All callers continue to work unchanged.
+function estimateTax({ ordinaryIncome = 0, capitalGains = 0, married = false, isWorking = true, stateRate = 0.05, stateCode = '', useStateBrackets = false }) {
   const fed = federalTax(ordinaryIncome, married);
   const lt = capitalGains > 0 ? capitalGains * 0.15 : 0; // simplified LTCG
-  const state = (ordinaryIncome + capitalGains) * stateRate;
+  // State tax: bracketed if a state is selected and the engine is enabled,
+  // otherwise the legacy flat-rate calculation.
+  const stateTaxableIncome = ordinaryIncome + capitalGains;
+  const state = (useStateBrackets && stateCode)
+    ? computeStateIncomeTax(stateTaxableIncome, stateCode, married)
+    : stateTaxableIncome * stateRate;
   const payroll = isWorking ? Math.min(ordinaryIncome, 168600) * 0.0765 : 0;
   return fed + lt + state + payroll;
 }
@@ -465,7 +493,9 @@ function simulate(inp, scenario = 'mod') {
       ordinaryIncome: taxableOrdinary,
       married: inp.married,
       isWorking,
-      stateRate: inp.stateRate
+      stateRate: inp.stateRate,
+      stateCode: inp.stateCode,
+      useStateBrackets: inp.useStateBrackets
     });
 
     // ----- Net cashflow -----
@@ -1004,19 +1034,105 @@ const fmtPct = (n) => `${(n * 100).toFixed(1)}%`;
 // ============================================================================
 // REUSABLE INPUTS
 // ============================================================================
+// Slider with a click-to-edit value display. Tap or click the number on the
+// right to type a value directly — useful when the slider is hard to nudge
+// precisely on touch screens, or when the user knows the exact value they want.
+// The two controls stay synced; whichever is easier in the moment.
 function Slider({ label, value, onChange, min, max, step, fmt = (v) => v, suffix = '', help }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+
+  // Begin editing — initialize the input with the current value as a clean string.
+  const startEditing = () => {
+    setDraft(String(value));
+    setEditing(true);
+  };
+
+  // Commit the edit — clamp to range, snap to step, fall back to current value if invalid.
+  const commit = () => {
+    const parsed = parseFloat(draft);
+    if (!isNaN(parsed)) {
+      let v = parsed;
+      // Clamp to the slider's bounds so the user can't enter values outside them.
+      if (v < min) v = min;
+      if (v > max) v = max;
+      // Snap to step. We treat step as a precision hint: round to it relative to min.
+      if (step) {
+        v = min + Math.round((v - min) / step) * step;
+        // Avoid floating point fuzz like 0.30000000000000004
+        const decimals = (String(step).split('.')[1] || '').length;
+        v = parseFloat(v.toFixed(Math.max(decimals, 4)));
+      }
+      onChange(v);
+    }
+    setEditing(false);
+  };
+
+  // Allow Enter to commit, Escape to cancel.
+  const onKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      commit();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      setEditing(false);
+    }
+  };
+
   return (
     <div className="mb-5">
       <div className="flex items-baseline justify-between mb-2">
         <label className="text-[12px] uppercase tracking-[0.12em]" style={{ color: T.muted, fontFamily: BODY_FONT, fontWeight: 500 }}>
           {label}
         </label>
-        <span style={{
-          fontFamily: DISPLAY_FONT, fontWeight: 500, fontSize: 18, color: T.ink,
-          fontVariantNumeric: 'tabular-nums'
-        }}>
-          {fmt(value)}{suffix}
-        </span>
+        {editing ? (
+          <div className="flex items-baseline" style={{ minWidth: 80 }}>
+            <input
+              autoFocus
+              type="text"
+              inputMode="decimal"
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onBlur={commit}
+              onKeyDown={onKeyDown}
+              style={{
+                fontFamily: DISPLAY_FONT, fontWeight: 500, fontSize: 18,
+                color: T.ink, fontVariantNumeric: 'tabular-nums',
+                background: T.surface, border: `1px solid ${T.ink}`,
+                padding: '2px 6px', borderRadius: 0,
+                width: 80, textAlign: 'right', outline: 'none'
+              }}
+            />
+            {suffix && (
+              <span style={{
+                fontFamily: DISPLAY_FONT, fontWeight: 500, fontSize: 18, color: T.ink,
+                marginLeft: 2
+              }}>
+                {suffix}
+              </span>
+            )}
+          </div>
+        ) : (
+          <button
+            onClick={startEditing}
+            type="button"
+            // Style the value as a button that doesn't look like a button until hover/focus.
+            // Click to edit; on touch devices a tap also opens the editor.
+            style={{
+              fontFamily: DISPLAY_FONT, fontWeight: 500, fontSize: 18, color: T.ink,
+              fontVariantNumeric: 'tabular-nums',
+              background: 'transparent', border: 'none',
+              borderBottom: `1px dashed ${T.ruleLight}`,
+              padding: '0 2px', cursor: 'text',
+              transition: 'border-color 120ms ease',
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.borderBottomColor = T.ink}
+            onMouseLeave={(e) => e.currentTarget.style.borderBottomColor = T.ruleLight}
+            title="Click to type a value"
+          >
+            {fmt(value)}{suffix}
+          </button>
+        )}
       </div>
       <input
         type="range"
@@ -1032,6 +1148,192 @@ function Slider({ label, value, onChange, min, max, step, fmt = (v) => v, suffix
       {help && (
         <p className="text-[11px] mt-1.5" style={{ color: T.muted, fontStyle: 'italic' }}>{help}</p>
       )}
+    </div>
+  );
+}
+
+// Compact editable percentage display, used in the income allocation buckets.
+// Click/tap the percentage to type a value directly. Commits on Enter or blur,
+// cancels on Escape. Clamps to 0-100 and snaps to integer.
+function EditablePct({ pct, onCommit }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+
+  const start = () => {
+    setDraft(String(pct));
+    setEditing(true);
+  };
+
+  const commit = () => {
+    const parsed = parseInt(draft, 10);
+    if (!isNaN(parsed)) {
+      let v = parsed;
+      if (v < 0) v = 0;
+      if (v > 100) v = 100;
+      onCommit(v);
+    }
+    setEditing(false);
+  };
+
+  const onKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      commit();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      setEditing(false);
+    }
+  };
+
+  if (editing) {
+    return (
+      <span style={{ display: 'inline-flex', alignItems: 'baseline' }}>
+        <input
+          autoFocus
+          type="text"
+          inputMode="numeric"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commit}
+          onKeyDown={onKeyDown}
+          style={{
+            fontFamily: MONO_FONT, fontSize: 13, fontWeight: 600, color: T.ink,
+            background: T.surface, border: `1px solid ${T.ink}`,
+            padding: '1px 4px', borderRadius: 0,
+            width: 40, textAlign: 'right', outline: 'none'
+          }}
+        />
+        <span style={{
+          fontFamily: MONO_FONT, fontSize: 13, fontWeight: 600,
+          color: T.ink, marginLeft: 1
+        }}>%</span>
+      </span>
+    );
+  }
+  return (
+    <button
+      onClick={start}
+      type="button"
+      style={{
+        fontFamily: MONO_FONT, fontSize: 13, fontWeight: 600,
+        color: T.ink, minWidth: 40, textAlign: 'right',
+        background: 'transparent', border: 'none',
+        borderBottom: `1px dashed ${T.ruleLight}`,
+        padding: '0 2px', cursor: 'text',
+        transition: 'border-color 120ms ease',
+      }}
+      onMouseEnter={(e) => e.currentTarget.style.borderBottomColor = T.ink}
+      onMouseLeave={(e) => e.currentTarget.style.borderBottomColor = T.ruleLight}
+      title="Click to type a value"
+    >
+      {pct}%
+    </button>
+  );
+}
+
+// ============================================================================
+// StateTaxPicker
+// ============================================================================
+// State dropdown (50 states + DC + "use manual rate"), with a contextual
+// note about each state's tax structure. When a state is picked, we use the
+// bracketed engine. The user can also flip a toggle to ignore the state
+// dropdown and enter a flat rate manually (useful for power users who want
+// precise control or want to model a different state).
+function StateTaxPicker({ stateCode, useStateBrackets, stateRate, onStateCodeChange, onUseBracketsChange, onStateRateChange }) {
+  const data = stateCode ? STATE_TAX_DATA[stateCode] : null;
+
+  // When a state is picked, switch to bracket engine automatically (more accurate).
+  // When state is cleared, fall back to the manual flat rate.
+  const handleStateChange = (e) => {
+    const code = e.target.value;
+    onStateCodeChange(code);
+    onUseBracketsChange(!!code);
+    // If the user picks a state, also update the manual rate to the top
+    // marginal rate as a sensible default for any subsequent override.
+    if (code) {
+      const top = topMarginalRate(code);
+      if (top > 0) onStateRateChange(top);
+    }
+  };
+
+  // Description shown below the dropdown to make the calculation transparent.
+  let stateDesc = null;
+  if (data) {
+    if (data.noTax) {
+      stateDesc = `${data.name} has no state income tax.${data.note ? ' ' + data.note : ''}`;
+    } else if (data.flat) {
+      stateDesc = `${data.name}: flat ${(data.flatRate * 100).toFixed(2).replace(/\.?0+$/,'')}% on income.${data.note ? ' ' + data.note : ''}`;
+    } else {
+      const top = topMarginalRate(stateCode);
+      stateDesc = `${data.name}: progressive brackets, top rate ${(top * 100).toFixed(2).replace(/\.?0+$/,'')}%.${data.note ? ' ' + data.note : ''}`;
+    }
+  }
+
+  return (
+    <div className="mb-5">
+      {/* State dropdown */}
+      <div className="mb-3">
+        <label className="text-[12px] uppercase tracking-[0.12em] block mb-1.5" style={{ color: T.muted, fontFamily: BODY_FONT, fontWeight: 500 }}>
+          State of residence
+        </label>
+        <select
+          value={stateCode || ''}
+          onChange={handleStateChange}
+          style={{
+            width: '100%', padding: '8px 10px',
+            background: T.surface, border: `1px solid ${T.rule}`,
+            fontFamily: BODY_FONT, fontSize: 14, color: T.ink,
+            fontWeight: 500, cursor: 'pointer', borderRadius: 0
+          }}
+        >
+          <option value="">Pick a state to use the right brackets</option>
+          {STATE_LIST.map(s => (
+            <option key={s.code} value={s.code}>{s.name}</option>
+          ))}
+        </select>
+        {stateDesc && (
+          <p className="text-[11px] mt-1.5" style={{ color: T.muted, fontStyle: 'italic', lineHeight: 1.45 }}>
+            {stateDesc} <span style={{ color: T.muted }}>Data as of {STATE_TAX_DATA_AS_OF}.</span>
+          </p>
+        )}
+        {!stateCode && (
+          <p className="text-[11px] mt-1.5" style={{ color: T.muted, fontStyle: 'italic', lineHeight: 1.45 }}>
+            Pick your state and the calculator runs your income through that state's actual brackets. Or skip this and enter a flat rate below.
+          </p>
+        )}
+      </div>
+
+      {/* Manual flat-rate override — disabled when a state is picked, but visible
+          so the user can see what's being used. Toggle to enable manual control. */}
+      <div style={{
+        background: useStateBrackets ? T.surfaceWarm : 'transparent',
+        opacity: useStateBrackets ? 0.55 : 1,
+        padding: useStateBrackets ? 8 : 0,
+        border: useStateBrackets ? `1px dashed ${T.ruleLight}` : 'none',
+        transition: 'opacity 120ms'
+      }}>
+        <Slider
+          label={useStateBrackets ? "Manual rate (override, currently disabled)" : "State income tax rate (manual)"}
+          value={stateRate}
+          onChange={onStateRateChange}
+          min={0} max={0.13} step={0.005}
+          fmt={(v) => fmtPct(v)}
+        />
+        {stateCode && (
+          <div className="flex items-center gap-2 mt-1">
+            <input
+              type="checkbox"
+              id="use-manual-rate"
+              checked={!useStateBrackets}
+              onChange={(e) => onUseBracketsChange(!e.target.checked)}
+              style={{ accentColor: T.ink }}
+            />
+            <label htmlFor="use-manual-rate" className="text-[11px]" style={{ color: T.muted, cursor: 'pointer' }}>
+              Use my manual rate instead of {STATE_TAX_DATA[stateCode]?.name}'s brackets
+            </label>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -1904,6 +2206,8 @@ export default function RetirementReadiness() {
     lifeExpectancy: 92,
     married: true,
     stateRate: 0.05,
+    stateCode: '',          // empty = use manual stateRate; otherwise run state brackets
+    useStateBrackets: false,
 
     // Income
     income: 175000,
@@ -3080,7 +3384,14 @@ export default function RetirementReadiness() {
               <Slider label="Life expectancy" value={inp.lifeExpectancy} onChange={set('lifeExpectancy')} min={75} max={105} step={1}
                 help="Plan for longer than the average, a 65-year-old has a meaningful chance of living past 90." />
               <Toggle label="Married / filing jointly" value={inp.married} onChange={set('married')} />
-              <Slider label="State income tax rate" value={inp.stateRate} onChange={set('stateRate')} min={0} max={0.13} step={0.005} fmt={(v) => fmtPct(v)} />
+              <StateTaxPicker
+                stateCode={inp.stateCode}
+                useStateBrackets={inp.useStateBrackets}
+                stateRate={inp.stateRate}
+                onStateCodeChange={set('stateCode')}
+                onUseBracketsChange={set('useStateBrackets')}
+                onStateRateChange={set('stateRate')}
+              />
             </Section>
           );
 
@@ -4394,12 +4705,10 @@ function SavingsAllocationEditor({ allocation, onChange }) {
                       ({effectiveShare}% of allocated)
                     </span>
                   )}
-                  <span style={{
-                    fontFamily: MONO_FONT, fontSize: 13, fontWeight: 600,
-                    color: T.ink, minWidth: 40, textAlign: 'right'
-                  }}>
-                    {pct}%
-                  </span>
+                  <EditablePct
+                    pct={pct}
+                    onCommit={(next) => handleSliderChange(b.key, next)}
+                  />
                 </div>
               </div>
               <input

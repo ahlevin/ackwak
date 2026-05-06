@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { BrowserRouter, Routes, Route, Link, useLocation, useNavigate, Navigate } from 'react-router-dom';
 import {
   Sparkles, ArrowRight, ArrowDown, Check, X, Menu, ChevronDown,
   TrendingUp, Home, GraduationCap, Briefcase, Heart, Gift, Car,
@@ -7,6 +8,7 @@ import {
   Zap, Eye, FileJson, BarChart3, Layers
 } from 'lucide-react';
 import RetirementReadiness from './components/RetirementReadiness.jsx';
+import JustLaidOffPage from './JustLaidOffPage.jsx';
 
 // Theme tokens shared with the calculator
 const T = {
@@ -37,27 +39,44 @@ const BODY_FONT = "'Inter', system-ui, -apple-system, sans-serif";
 const MONO_FONT = "'Geist Mono', 'JetBrains Mono', ui-monospace, monospace";
 
 export default function App() {
-  // Use URL hash to switch between landing and calculator
-  const [route, setRoute] = useState(() => window.location.hash || '');
+  return (
+    <BrowserRouter>
+      <ScrollToTop />
+      <HashRedirect />
+      <Routes>
+        <Route path="/" element={<LandingPage />} />
+        <Route path="/calculator" element={<CalculatorView />} />
+        <Route path="/just-laid-off" element={<JustLaidOffPage />} />
+        {/* Catch-all: anything else goes home. Friendlier than a 404. */}
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </BrowserRouter>
+  );
+}
 
-  useEffect(() => {
-    const onHashChange = () => setRoute(window.location.hash || '');
-    window.addEventListener('hashchange', onHashChange);
-    return () => window.removeEventListener('hashchange', onHashChange);
-  }, []);
-
-  // When the user navigates to the calculator (or back home), scroll to the top.
-  // The hash-based routing otherwise leaves the browser scrolled to wherever it was
-  // before, which on landing→calculator transitions lands you mid-page.
+// Scroll to top whenever the route changes. Same intuition as our hash-based routing
+// before — without this, navigating between routes leaves you scrolled mid-page.
+function ScrollToTop() {
+  const { pathname } = useLocation();
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'auto' });
-  }, [route]);
+  }, [pathname]);
+  return null;
+}
 
-  if (route === '#calculator' || route === '#app') {
-    return <CalculatorView />;
-  }
-
-  return <LandingPage />;
+// Backwards compatibility: if someone hits ackwak.com/#calculator (old hash route),
+// redirect to /calculator. Same for #app.
+function HashRedirect() {
+  const navigate = useNavigate();
+  useEffect(() => {
+    const map = { '#calculator': '/calculator', '#app': '/calculator' };
+    const target = map[window.location.hash];
+    if (target) {
+      // Replace, don't push — we don't want the hash URL in browser history.
+      navigate(target, { replace: true });
+    }
+  }, [navigate]);
+  return null;
 }
 
 function CalculatorView() {
@@ -72,20 +91,20 @@ function CalculatorView() {
         borderBottom: `1px solid ${T.ink}`
       }}>
         <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <a href="#" style={{
+          <Link to="/" style={{
             color: T.surface, textDecoration: 'none',
             fontFamily: DISPLAY_FONT, fontSize: 16, fontWeight: 600,
             letterSpacing: '-0.01em', display: 'flex', alignItems: 'center', gap: 6
           }}>
             ← <span>ackwak.com</span>
-          </a>
-          <a href="#" style={{
+          </Link>
+          <Link to="/" style={{
             color: '#A8C9B5', textDecoration: 'none',
             fontFamily: BODY_FONT, fontSize: 11,
             textTransform: 'uppercase', letterSpacing: '0.15em', fontWeight: 500
           }}>
             Back to home
-          </a>
+          </Link>
         </div>
       </div>
       <RetirementReadiness />
@@ -136,7 +155,7 @@ function Nav() {
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         height: 64
       }}>
-        <a href="#" style={{
+        <Link to="/" style={{
           color: T.ink, fontFamily: DISPLAY_FONT,
           fontSize: 22, fontWeight: 600, letterSpacing: '-0.02em',
           display: 'flex', alignItems: 'center', gap: 8
@@ -148,21 +167,22 @@ function Nav() {
             letterSpacing: '-0.02em'
           }}>a</span>
           ackwak<span style={{ color: T.muted, fontWeight: 400 }}>.com</span>
-        </a>
+        </Link>
 
         <div className="hidden md:flex items-center gap-8" style={{ fontSize: 14, fontWeight: 500 }}>
           <a href="#features" style={{ color: T.inkSoft }}>Features</a>
           <a href="#how-it-works" style={{ color: T.inkSoft }}>How it works</a>
           <a href="#privacy" style={{ color: T.inkSoft }}>Privacy</a>
           <a href="#faq" style={{ color: T.inkSoft }}>FAQ</a>
-          <a href="#calculator" style={{
+          <Link to="/just-laid-off" style={{ color: T.inkSoft }}>Just laid off?</Link>
+          <Link to="/calculator" style={{
             background: T.ink, color: T.surface,
             padding: '8px 16px', fontWeight: 600,
             fontSize: 12, letterSpacing: '0.05em', textTransform: 'uppercase',
             display: 'inline-flex', alignItems: 'center', gap: 6
           }}>
             Launch calculator <ArrowRight size={13} strokeWidth={2} />
-          </a>
+          </Link>
         </div>
 
         <button
@@ -185,7 +205,8 @@ function Nav() {
             <a href="#how-it-works" onClick={() => setOpen(false)} style={{ color: T.inkSoft }}>How it works</a>
             <a href="#privacy" onClick={() => setOpen(false)} style={{ color: T.inkSoft }}>Privacy</a>
             <a href="#faq" onClick={() => setOpen(false)} style={{ color: T.inkSoft }}>FAQ</a>
-            <a href="#calculator" onClick={() => setOpen(false)} style={{
+            <Link to="/just-laid-off" onClick={() => setOpen(false)} style={{ color: T.inkSoft }}>Just laid off?</Link>
+            <Link to="/calculator" onClick={() => setOpen(false)} style={{
               background: T.ink, color: T.surface,
               padding: '10px 16px', fontWeight: 600,
               fontSize: 12, letterSpacing: '0.05em', textTransform: 'uppercase',
@@ -193,7 +214,7 @@ function Nav() {
               display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6
             }}>
               Launch calculator <ArrowRight size={13} strokeWidth={2} />
-            </a>
+            </Link>
           </div>
         </div>
       )}
@@ -224,7 +245,6 @@ function Hero() {
           lineHeight: 0.95, letterSpacing: '-0.03em', color: T.ink,
           marginBottom: 28, fontVariationSettings: '"opsz" 144'
         }}>
-          A dumb name.<br />
           The <em style={{ fontStyle: 'italic', fontWeight: 400, color: T.emerald }}>best darn calculator</em><br />
           on the planet.
         </h1>
@@ -237,14 +257,14 @@ function Hero() {
         </p>
 
         <div className="flex items-center gap-3 flex-wrap mb-12">
-          <a href="#calculator" style={{
+          <Link to="/calculator" style={{
             background: T.ink, color: T.surface,
             padding: '14px 24px', fontWeight: 600,
             fontSize: 13, letterSpacing: '0.08em', textTransform: 'uppercase',
             display: 'inline-flex', alignItems: 'center', gap: 8
           }}>
             Launch the calculator <ArrowRight size={15} strokeWidth={2} />
-          </a>
+          </Link>
           <a href="#features" style={{
             color: T.inkSoft, padding: '14px 8px',
             fontWeight: 500, fontSize: 14,
@@ -294,7 +314,7 @@ function Hero() {
 
 function ViewPreviewCard({ number, icon: Icon, title, desc, accentColor }) {
   return (
-    <a href="#calculator" className="block p-4 sm:p-5 transition-opacity hover:opacity-90" style={{
+    <Link to="/calculator" className="block p-4 sm:p-5 transition-opacity hover:opacity-90" style={{
       background: T.surface, border: `1px solid ${T.rule}`,
       borderTop: `3px solid ${accentColor}`,
       textDecoration: 'none'
@@ -318,7 +338,7 @@ function ViewPreviewCard({ number, icon: Icon, title, desc, accentColor }) {
       <p style={{ fontSize: 13, lineHeight: 1.5, color: T.inkSoft, margin: 0 }}>
         {desc}
       </p>
-    </a>
+    </Link>
   );
 }
 
@@ -1074,7 +1094,7 @@ function FAQ() {
   const faqs = [
     {
       q: "What's with the name?",
-      a: "It's a dumb name. We told you. The calculator's the thing. The name is just a domain that was available. Don't overthink it."
+      a: "The calculator's the thing. The name is just a domain that was available. Don't overthink it."
     },
     {
       q: "Is this really free?",
@@ -1184,14 +1204,14 @@ function FinalCTA() {
         <p style={{ fontSize: 'clamp(15px, 1.6vw, 18px)', lineHeight: 1.55, color: '#C9C4BB', maxWidth: 600, marginBottom: 36 }}>
           The default scenario takes about a minute to fill out. Adjust it to your numbers. The chart updates instantly. Save what you like, throw away what you don't.
         </p>
-        <a href="#calculator" style={{
+        <Link to="/calculator" style={{
           background: '#9DD9B5', color: T.ink,
           padding: '16px 28px', fontWeight: 700,
           fontSize: 14, letterSpacing: '0.08em', textTransform: 'uppercase',
           display: 'inline-flex', alignItems: 'center', gap: 8
         }}>
           Launch the calculator <ArrowRight size={16} strokeWidth={2.5} />
-        </a>
+        </Link>
       </div>
     </section>
   );
@@ -1219,7 +1239,7 @@ function Footer() {
               ackwak<span style={{ color: T.muted, fontWeight: 400 }}>.com</span>
             </div>
             <p style={{ fontSize: 12, color: T.muted, maxWidth: 320 }}>
-              A dumb name. The best darn retirement, net worth, and expenditure calculator on the planet.
+              The best darn retirement, net worth, and expenditure calculator on the planet.
             </p>
           </div>
           <div style={{ fontSize: 11, color: T.muted, lineHeight: 1.6, maxWidth: 480 }}>
@@ -1232,7 +1252,7 @@ function Footer() {
             <a href="#features" style={{ color: T.muted }}>Features</a>
             <a href="#privacy" style={{ color: T.muted }}>Privacy</a>
             <a href="#faq" style={{ color: T.muted }}>FAQ</a>
-            <a href="#calculator" style={{ color: T.ink, fontWeight: 600 }}>Launch app →</a>
+            <Link to="/calculator" style={{ color: T.ink, fontWeight: 600 }}>Launch app →</Link>
           </div>
         </div>
       </div>

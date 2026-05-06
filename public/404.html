@@ -1,0 +1,23 @@
+<!doctype html>
+<!--
+  GitHub Pages SPA redirect.
+  When a user hits a URL like ackwak.com/just-laid-off directly, GitHub Pages can't find
+  a matching file and serves this page. We immediately rewrite to / and pass the original
+  path along in sessionStorage, so the React app can pick it up and route correctly.
+  Standard pattern from rafgraph/spa-github-pages.
+-->
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>ackwak.com</title>
+  <script>
+    // Stash the path the user originally requested, then redirect to root.
+    // index.html will read this and replace history with the proper route.
+    sessionStorage.redirect = location.href;
+  </script>
+  <meta http-equiv="refresh" content="0;URL='/'">
+</head>
+<body>
+  Loading...
+</body>
+</html>

@@ -3,23 +3,49 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23171513'/%3E%3Ctext x='50%25' y='50%25' text-anchor='middle' dominant-baseline='central' font-family='Georgia,serif' font-size='22' font-weight='700' fill='white'%3Ea%3C/text%3E%3C/svg%3E" />
+
+    <!-- Browser tab icon (SVG, scalable) -->
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%230F1A4D'/%3E%3Ctext x='50%25' y='50%25' text-anchor='middle' dominant-baseline='central' font-family='Georgia,serif' font-size='22' font-weight='700' fill='white'%3Ea%3C/text%3E%3C/svg%3E" />
+    <!-- PNG favicon fallback for browsers that don't support SVG favicons -->
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <!-- Apple Touch Icon: shows up when users add ackwak.com to their iPhone home screen -->
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
 
     <title>ackwak.com — The best retirement & net worth calculator on the planet</title>
     <meta name="description" content="A free, private retirement and net worth calculator that models your real life — properties, kids, inheritances, leases. Three risk scenarios, year-by-year projections, your data never leaves your browser." />
 
-    <!-- Open Graph -->
+    <!-- Open Graph (used by iMessage, Slack, LinkedIn, Facebook, etc. for link previews) -->
     <meta property="og:title" content="ackwak.com — The best retirement & net worth calculator" />
     <meta property="og:description" content="Free, private retirement & net worth calculator. Models properties, kids, inheritances, leases. Three risk scenarios. Your data stays in your browser." />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://ackwak.com" />
+    <meta property="og:image" content="https://ackwak.com/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="ackwak.com — net worth, retirement readiness, and job loss runway calculator" />
 
     <!-- Twitter Card -->
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="ackwak.com — The best retirement calculator on the planet" />
     <meta name="twitter:description" content="Free, private retirement & net worth calculator that models your real life. No signup, no tracking." />
+    <meta name="twitter:image" content="https://ackwak.com/og-image.png" />
 
-    <meta name="theme-color" content="#171513" />
+    <meta name="theme-color" content="#0F1A4D" />
+
+    <!--
+      GitHub Pages SPA support: 404.html stashed the originally-requested URL into
+      sessionStorage. If we find one, replace history before React mounts so the
+      router lands on the correct route.
+    -->
+    <script>
+      (function() {
+        var redirect = sessionStorage.redirect;
+        delete sessionStorage.redirect;
+        if (redirect && redirect !== location.href) {
+          history.replaceState(null, null, redirect);
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

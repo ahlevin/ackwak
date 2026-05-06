@@ -3559,6 +3559,9 @@ export default function RetirementReadiness() {
           <p>
             <strong style={{ color: T.inkSoft }}>This is not financial advice.</strong> A real plan benefits from a fiduciary advisor running stochastic simulations against your tax situation, asset location, and Roth conversion strategy.
           </p>
+          <p className="mt-3" style={{ fontSize: 10, color: T.muted }}>
+            © {new Date().getFullYear()} SLAE Labs LLC. All rights reserved. ackwak.com is a product of SLAE Labs LLC.
+          </p>
         </div>
       </div>
     </div>

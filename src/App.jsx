@@ -1227,7 +1227,7 @@ function Footer() {
           </div>
         </div>
         <div className="mt-6 pt-5 flex flex-wrap items-center justify-between gap-3" style={{ borderTop: `1px solid ${T.rule}`, fontSize: 11, color: T.muted }}>
-          <span>© {new Date().getFullYear()} ackwak.com</span>
+          <span>© {new Date().getFullYear()} SLAE Labs LLC. All rights reserved. ackwak.com is a product of SLAE Labs LLC.</span>
           <div className="flex items-center gap-4">
             <a href="#features" style={{ color: T.muted }}>Features</a>
             <a href="#privacy" style={{ color: T.muted }}>Privacy</a>

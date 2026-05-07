@@ -8,7 +8,7 @@ import {
   GraduationCap, PiggyBank, Receipt, ChevronDown, Info, Settings, User,
   Sparkles, ShieldCheck, Activity, Wind, Plus, Trash2, Gift,
   Save, Upload, Download, FolderOpen, Copy, X, Check,
-  Car, CreditCard, Wallet, Scale, Package, KeyRound,
+  Car, CreditCard, Wallet, Scale, Package, KeyRound, Calendar,
   FileSpreadsheet, Printer, FileText
 } from 'lucide-react';
 import { exportToExcel, importFromExcel } from '../excelExport.js';
@@ -3397,13 +3397,26 @@ export default function RetirementReadiness() {
           };
 
           // ---------- SHARED SECTIONS (live in Net Worth) ----------
+          // "About you" is the small bit of universal context that applies to every tab:
+          // current age and married/filing status. Retirement-only inputs (target retirement
+          // age, life expectancy) live in the separate Planning Horizon section below, which
+          // only appears on the Retirement tab.
           const aboutYouSection = (
             <Section icon={User} title="About you" defaultOpen={open.aboutYou} badge={sharedBadge}>
               <Slider label="Current age" value={inp.currentAge} onChange={set('currentAge')} min={25} max={75} step={1} />
+              <Toggle label="Married / filing jointly" value={inp.married} onChange={set('married')} />
+            </Section>
+          );
+
+          // Retirement-only: when do you plan to retire, how long do you expect to live.
+          // These don't affect today's net worth or short-term runway, only the long-term
+          // projection. Lives here because it logically pairs with the rest of the
+          // retirement-specific inputs.
+          const planningHorizonSection = (
+            <Section icon={Calendar} title="Planning horizon" defaultOpen={true} badge={newBadge}>
               <Slider label="Target retirement age" value={inp.retirementAge} onChange={set('retirementAge')} min={Math.max(inp.currentAge, 50)} max={80} step={1} />
               <Slider label="Life expectancy" value={inp.lifeExpectancy} onChange={set('lifeExpectancy')} min={75} max={105} step={1}
                 help="Plan for longer than the average, a 65-year-old has a meaningful chance of living past 90." />
-              <Toggle label="Married / filing jointly" value={inp.married} onChange={set('married')} />
             </Section>
           );
 
@@ -3451,6 +3464,43 @@ export default function RetirementReadiness() {
                     Each child's 529 balance is applied to their own education costs first (tax-free for qualified expenses). Any shortfall draws from regular savings.
                   </p>
                 </div>
+              )}
+            </Section>
+          );
+
+          // Net Worth view shows education savings (529s) as ASSETS, without the
+          // future-cost entries that only matter for projection. The per-child name
+          // and 529 balance are editable here. Adding/removing children, or editing
+          // education stages, happens on the Retirement tab where it logically fits.
+          const educationSavingsSection = (
+            <Section
+              icon={GraduationCap}
+              title={`Education savings (529)${totalChildren > 0 ? ` · ${totalChildren} ${totalChildren === 1 ? 'child' : 'children'}` : ''}`}
+              defaultOpen={false}
+              badge={null}
+            >
+              {totalChildren === 0 && (
+                <p className="text-[12px] mb-3" style={{ color: T.muted, fontStyle: 'italic' }}>
+                  No 529 plans tracked. To add children, education stages, or 529 balances, switch to the Retirement tab.
+                </p>
+              )}
+              {(inp.children || []).map(child => (
+                <div key={child.id} className="mb-4 pb-4" style={{ borderBottom: `1px solid ${T.ruleLight}` }}>
+                  <div className="text-[11px] uppercase tracking-[0.12em] mb-2" style={{ color: T.muted, fontWeight: 500 }}>
+                    {child.name || 'Child'}
+                  </div>
+                  <NumInput
+                    label="529 balance"
+                    value={child.c529Balance}
+                    onChange={(v) => updateChild(child.id, { c529Balance: v })}
+                    step={1000}
+                  />
+                </div>
+              ))}
+              {totalChildren > 0 && (
+                <p className="text-[11px] mt-2" style={{ color: T.muted, fontStyle: 'italic' }}>
+                  Education future costs (tuition, durations, school stages) live in the Retirement tab — they affect the long-term projection but not today's net worth.
+                </p>
               )}
             </Section>
           );
@@ -3798,23 +3848,48 @@ export default function RetirementReadiness() {
 
           // ---------- LAYOUT PER TAB ----------
           if (isNW) {
-            // Net Worth tab keeps the existing 2-column layout, no grouping.
+            // Net Worth: structured as Assets and Liabilities (the accounting equation
+            // Assets − Liabilities = Net Worth). Personal context (age + married) is
+            // a small "Personal" section above; everything else gets categorized.
+            //
+            // Properties, vehicles, and similar compound items keep their internal
+            // structure (value + associated debt in one card). The card itself is an
+            // ASSET (its net contribution to net worth is value minus debt). We don't
+            // try to tear those apart across columns — the math still works.
             return (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-12">
-                <div>
-                  <SectionHeader>Personal & Income</SectionHeader>
+              <>
+                <SectionGroup
+                  title="Personal"
+                  subtext="Basic context that applies across all tabs."
+                  accentColor={T.muted}
+                >
                   {aboutYouSection}
-                  {childrenSection}
+                </SectionGroup>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-12">
+                  <div>
+                    <SectionGroup
+                      title="Assets"
+                      subtext="What you own. Properties and vehicles include their associated debt; the net contribution to net worth is value minus debt."
+                      accentColor={T.emerald}
+                    >
+                      {savingsSection}
+                      {propertiesSection}
+                      {vehiclesSection}
+                      {educationSavingsSection}
+                      {otherAssetsSection}
+                    </SectionGroup>
+                  </div>
+                  <div>
+                    <SectionGroup
+                      title="Liabilities"
+                      subtext="What you owe that isn't already attached to an asset above. Mortgages and vehicle loans are tracked inside their parent asset cards."
+                      accentColor={T.oxblood}
+                    >
+                      {debtsSection}
+                    </SectionGroup>
+                  </div>
                 </div>
-                <div>
-                  <SectionHeader>Assets & Liabilities</SectionHeader>
-                  {savingsSection}
-                  {propertiesSection}
-                  {vehiclesSection}
-                  {debtsSection}
-                  {otherAssetsSection}
-                </div>
-              </div>
+              </>
             );
           }
 
@@ -3826,10 +3901,12 @@ export default function RetirementReadiness() {
                   subtext="These inputs only matter for the retirement projection. They don't affect the Net Worth or Job Loss views. Fill these in to get your projection."
                   accentColor={BADGE_NEW_RET.color}
                 >
+                  {planningHorizonSection}
                   {incomeSection}
                   {expensesSection}
                   {rentSection}
                   {retirementIncomeSection}
+                  {childrenSection}
                   {inheritancesSection}
                   {macroSection}
                 </SectionGroup>
@@ -3844,7 +3921,6 @@ export default function RetirementReadiness() {
                   {vehiclesSection}
                   {debtsSection}
                   {otherAssetsSection}
-                  {childrenSection}
                 </SectionGroup>
               </>
             );
@@ -3874,7 +3950,6 @@ export default function RetirementReadiness() {
                   {vehiclesSection}
                   {debtsSection}
                   {otherAssetsSection}
-                  {childrenSection}
                 </SectionGroup>
               </>
             );

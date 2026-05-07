@@ -1239,7 +1239,11 @@ function EditablePct({ pct, onCommit }) {
 // bracketed engine. The user can also flip a toggle to ignore the state
 // dropdown and enter a flat rate manually (useful for power users who want
 // precise control or want to model a different state).
-function StateTaxPicker({ stateCode, useStateBrackets, stateRate, onStateCodeChange, onUseBracketsChange, onStateRateChange }) {
+//
+// Shows the user's *effective* state tax rate at their actual income, not
+// the top marginal rate, since the top marginal rate is misleading for
+// most users (it's the rate on income above hundreds of thousands of dollars).
+function StateTaxPicker({ stateCode, useStateBrackets, stateRate, married = false, income = 0, onStateCodeChange, onUseBracketsChange, onStateRateChange }) {
   const data = stateCode ? STATE_TAX_DATA[stateCode] : null;
 
   // When a state is picked, switch to bracket engine automatically (more accurate).
@@ -1248,24 +1252,25 @@ function StateTaxPicker({ stateCode, useStateBrackets, stateRate, onStateCodeCha
     const code = e.target.value;
     onStateCodeChange(code);
     onUseBracketsChange(!!code);
-    // If the user picks a state, also update the manual rate to the top
-    // marginal rate as a sensible default for any subsequent override.
-    if (code) {
-      const top = topMarginalRate(code);
-      if (top > 0) onStateRateChange(top);
-    }
   };
 
-  // Description shown below the dropdown to make the calculation transparent.
+  // What the user actually pays at their income — far more meaningful than top marginal.
   let stateDesc = null;
+  let effectiveLine = null;
   if (data) {
     if (data.noTax) {
-      stateDesc = `${data.name} has no state income tax.${data.note ? ' ' + data.note : ''}`;
+      stateDesc = `${data.name} has no state income tax.`;
     } else if (data.flat) {
-      stateDesc = `${data.name}: flat ${(data.flatRate * 100).toFixed(2).replace(/\.?0+$/,'')}% on income.${data.note ? ' ' + data.note : ''}`;
+      stateDesc = `${data.name}: flat ${(data.flatRate * 100).toFixed(2).replace(/\.?0+$/,'')}% on income.`;
     } else {
       const top = topMarginalRate(stateCode);
-      stateDesc = `${data.name}: progressive brackets, top rate ${(top * 100).toFixed(2).replace(/\.?0+$/,'')}%.${data.note ? ' ' + data.note : ''}`;
+      stateDesc = `${data.name}: progressive brackets, top rate ${(top * 100).toFixed(2).replace(/\.?0+$/,'')}% (applies only to income in the highest bracket).`;
+    }
+    // Compute the effective rate at the user's income, if income > 0.
+    if (!data.noTax && income > 0) {
+      const tax = computeStateIncomeTax(income, stateCode, married);
+      const effRate = (tax / income) * 100;
+      effectiveLine = `At $${(income).toLocaleString()} ${married ? 'married filing jointly' : 'single'}: ~$${Math.round(tax).toLocaleString()} state tax (effective ${effRate.toFixed(2)}%).`;
     }
   }
 
@@ -1274,7 +1279,7 @@ function StateTaxPicker({ stateCode, useStateBrackets, stateRate, onStateCodeCha
       {/* State dropdown */}
       <div className="mb-3">
         <label className="text-[12px] uppercase tracking-[0.12em] block mb-1.5" style={{ color: T.muted, fontFamily: BODY_FONT, fontWeight: 500 }}>
-          State of residence
+          State of residence (for tax)
         </label>
         <select
           value={stateCode || ''}
@@ -1293,12 +1298,27 @@ function StateTaxPicker({ stateCode, useStateBrackets, stateRate, onStateCodeCha
         </select>
         {stateDesc && (
           <p className="text-[11px] mt-1.5" style={{ color: T.muted, fontStyle: 'italic', lineHeight: 1.45 }}>
-            {stateDesc} <span style={{ color: T.muted }}>Data as of {STATE_TAX_DATA_AS_OF}.</span>
+            {stateDesc}
+          </p>
+        )}
+        {effectiveLine && (
+          <p className="text-[11px] mt-1.5" style={{ color: T.ink, lineHeight: 1.45, fontWeight: 500 }}>
+            {effectiveLine}
+          </p>
+        )}
+        {data?.note && (
+          <p className="text-[10px] mt-1" style={{ color: T.muted, fontStyle: 'italic', lineHeight: 1.45 }}>
+            Note: {data.note}
           </p>
         )}
         {!stateCode && (
           <p className="text-[11px] mt-1.5" style={{ color: T.muted, fontStyle: 'italic', lineHeight: 1.45 }}>
             Pick your state and the calculator runs your income through that state's actual brackets. Or skip this and enter a flat rate below.
+          </p>
+        )}
+        {stateCode && data && !data.noTax && (
+          <p className="text-[10px] mt-1" style={{ color: T.muted, fontStyle: 'italic', lineHeight: 1.45 }}>
+            Data as of {STATE_TAX_DATA_AS_OF}. Planning estimate only — does not include local/city taxes, deductions, credits, or special rules for retirement income. For tax preparation, consult a tax professional.
           </p>
         )}
       </div>
@@ -3384,14 +3404,6 @@ export default function RetirementReadiness() {
               <Slider label="Life expectancy" value={inp.lifeExpectancy} onChange={set('lifeExpectancy')} min={75} max={105} step={1}
                 help="Plan for longer than the average, a 65-year-old has a meaningful chance of living past 90." />
               <Toggle label="Married / filing jointly" value={inp.married} onChange={set('married')} />
-              <StateTaxPicker
-                stateCode={inp.stateCode}
-                useStateBrackets={inp.useStateBrackets}
-                stateRate={inp.stateRate}
-                onStateCodeChange={set('stateCode')}
-                onUseBracketsChange={set('useStateBrackets')}
-                onStateRateChange={set('stateRate')}
-              />
             </Section>
           );
 
@@ -3593,6 +3605,18 @@ export default function RetirementReadiness() {
               <NumInput label="Current annual income" value={inp.income} onChange={set('income')} step={5000} />
               <Slider label="Years of expected earnings remaining" value={inp.earningYears} onChange={set('earningYears')} min={0} max={50} step={1} />
               <Slider label="Annual salary growth" value={inp.salaryGrowth} onChange={set('salaryGrowth')} min={0} max={0.08} step={0.005} fmt={(v) => fmtPct(v)} />
+              <div className="mt-5 pt-4" style={{ borderTop: `1px solid ${T.ruleLight}` }}>
+                <StateTaxPicker
+                  stateCode={inp.stateCode}
+                  useStateBrackets={inp.useStateBrackets}
+                  stateRate={inp.stateRate}
+                  married={inp.married}
+                  income={inp.income}
+                  onStateCodeChange={set('stateCode')}
+                  onUseBracketsChange={set('useStateBrackets')}
+                  onStateRateChange={set('stateRate')}
+                />
+              </div>
               {isRet && (
                 <div className="mt-5 pt-4" style={{ borderTop: `1px solid ${T.ruleLight}` }}>
                   <SavingsAllocationEditor

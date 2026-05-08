@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import RetirementReadiness from './components/RetirementReadiness.jsx';
 import JustLaidOffPage from './JustLaidOffPage.jsx';
+import LeavingOnYourTermsPage from './LeavingOnYourTermsPage.jsx';
 
 // Theme tokens shared with the calculator
 const T = {
@@ -47,6 +48,7 @@ export default function App() {
         <Route path="/" element={<LandingPage />} />
         <Route path="/calculator" element={<CalculatorView />} />
         <Route path="/just-laid-off" element={<JustLaidOffPage />} />
+        <Route path="/leaving-on-your-terms" element={<LeavingOnYourTermsPage />} />
         {/* Catch-all: anything else goes home. Friendlier than a 404. */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
@@ -54,13 +56,36 @@ export default function App() {
   );
 }
 
-// Scroll to top whenever the route changes. Same intuition as our hash-based routing
-// before — without this, navigating between routes leaves you scrolled mid-page.
+// Scroll behavior on route change.
+//   - On a route change with no hash: scroll to top (avoids landing mid-page after a route change)
+//   - On a route change WITH a hash that matches an element: scroll to that element
+//
+// This makes nav links like /#features and /#faq work from any page: clicking
+// them on /just-laid-off navigates to / and scrolls to the section.
 function ScrollToTop() {
-  const { pathname } = useLocation();
+  const { pathname, hash } = useLocation();
   useEffect(() => {
+    // If there's a hash and the corresponding element exists, scroll to it.
+    // We use a small delay so the target section has time to mount when arriving
+    // from a different route.
+    if (hash) {
+      // The HashRedirect component handles legacy #calculator and #app — for those,
+      // bail out so we don't try to scroll to a nonexistent element.
+      if (hash === '#calculator' || hash === '#app') return;
+      // Defer to give React a tick to render any newly-mounted page.
+      const id = hash.slice(1);
+      setTimeout(() => {
+        const el = document.getElementById(id);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        } else {
+          window.scrollTo({ top: 0, behavior: 'auto' });
+        }
+      }, 50);
+      return;
+    }
     window.scrollTo({ top: 0, behavior: 'auto' });
-  }, [pathname]);
+  }, [pathname, hash]);
   return null;
 }
 
@@ -72,7 +97,7 @@ function HashRedirect() {
     const map = { '#calculator': '/calculator', '#app': '/calculator' };
     const target = map[window.location.hash];
     if (target) {
-      // Replace, don't push — we don't want the hash URL in browser history.
+      // Replace, don't push, we don't want the hash URL in browser history.
       navigate(target, { replace: true });
     }
   }, [navigate]);
@@ -83,30 +108,7 @@ function CalculatorView() {
   return (
     <div style={{ background: T.bg, minHeight: '100vh' }}>
       <link rel="stylesheet" href={FONTS_HREF} />
-      {/* Persistent back-to-home nav strip */}
-      <div style={{
-        background: T.ink, color: T.surface,
-        padding: '10px 20px',
-        position: 'sticky', top: 0, zIndex: 30,
-        borderBottom: `1px solid ${T.ink}`
-      }}>
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <Link to="/" style={{
-            color: T.surface, textDecoration: 'none',
-            fontFamily: DISPLAY_FONT, fontSize: 16, fontWeight: 600,
-            letterSpacing: '-0.01em', display: 'flex', alignItems: 'center', gap: 6
-          }}>
-            ← <span>ackwak.com</span>
-          </Link>
-          <Link to="/" style={{
-            color: '#A8C9B5', textDecoration: 'none',
-            fontFamily: BODY_FONT, fontSize: 11,
-            textTransform: 'uppercase', letterSpacing: '0.15em', fontWeight: 500
-          }}>
-            Back to home
-          </Link>
-        </div>
-      </div>
+      <SiteNav />
       <RetirementReadiness />
     </div>
   );
@@ -125,7 +127,7 @@ function LandingPage() {
         a { text-decoration: none; }
       `}</style>
 
-      <Nav />
+      <SiteNav />
       <Hero />
       <SocialProof />
       <FeatureOverview />
@@ -141,8 +143,69 @@ function LandingPage() {
 // ============================================================================
 // NAV
 // ============================================================================
-function Nav() {
+// SITE NAV (unified — used by every page)
+// ============================================================================
+// One nav component, used on every page (landing, calculator, /just-laid-off,
+// /leaving-on-your-terms, etc.). Replaces three earlier per-page navs that
+// each surfaced a different subset of the site, forcing users to bounce home
+// to navigate between pages.
+//
+// Key behaviors:
+//   - Active page is highlighted (bolder, ink color)
+//   - Anchor links to landing-page sections (Features, FAQ, etc.) use the
+//     /#anchor form so they work from any page (the LandingPage's effect
+//     scrolls to the anchor on arrival)
+//   - The "Launch calculator" CTA hides when already on /calculator
+//   - Mobile hamburger overlay shows the same items
+//
+// To add a new top-level link later (a /transitions hub, a /severance guide,
+// etc.), just add it to NAV_LINKS below; both desktop and mobile menus
+// pick it up automatically.
+const NAV_LINKS = [
+  { label: 'Calculator',    to: '/calculator',           type: 'route' },
+  { label: 'Just laid off?', to: '/just-laid-off',        type: 'route' },
+  { label: 'Leaving by choice?', to: '/leaving-on-your-terms', type: 'route' },
+  { label: 'Features',      to: '/#features',            type: 'anchor' },
+  { label: 'FAQ',           to: '/#faq',                 type: 'anchor' }
+];
+
+export function SiteNav() {
   const [open, setOpen] = useState(false);
+  const { pathname } = useLocation();
+  const onCalculator = pathname === '/calculator';
+
+  // Whether a given link should be styled as the "active" one.
+  const isActive = (link) => {
+    if (link.type !== 'route') return false;
+    return pathname === link.to;
+  };
+
+  // A nav link element — Link for routes, plain <a> for anchors so the
+  // browser handles the in-page scroll (anchor links to / are still
+  // navigated through React Router; LandingPage scrolls on mount/hash change).
+  const renderLink = (link, mobile = false) => {
+    const active = isActive(link);
+    const baseStyle = {
+      color: active ? T.ink : T.inkSoft,
+      fontWeight: active ? 700 : 500,
+      textDecoration: 'none'
+    };
+    const onClick = mobile ? () => setOpen(false) : undefined;
+    if (link.type === 'route') {
+      return (
+        <Link key={link.to} to={link.to} onClick={onClick} style={baseStyle}>
+          {link.label}
+        </Link>
+      );
+    }
+    // Anchor link — always a real Link to "/#anchor" so it works from any page.
+    return (
+      <Link key={link.to} to={link.to} onClick={onClick} style={baseStyle}>
+        {link.label}
+      </Link>
+    );
+  };
+
   return (
     <header style={{
       borderBottom: `1px solid ${T.rule}`,
@@ -169,26 +232,25 @@ function Nav() {
           ackwak<span style={{ color: T.muted, fontWeight: 400 }}>.com</span>
         </Link>
 
-        <div className="hidden md:flex items-center gap-8" style={{ fontSize: 14, fontWeight: 500 }}>
-          <a href="#features" style={{ color: T.inkSoft }}>Features</a>
-          <a href="#how-it-works" style={{ color: T.inkSoft }}>How it works</a>
-          <a href="#privacy" style={{ color: T.inkSoft }}>Privacy</a>
-          <a href="#faq" style={{ color: T.inkSoft }}>FAQ</a>
-          <Link to="/just-laid-off" style={{ color: T.inkSoft }}>Just laid off?</Link>
-          <Link to="/calculator" style={{
-            background: T.ink, color: T.surface,
-            padding: '8px 16px', fontWeight: 600,
-            fontSize: 12, letterSpacing: '0.05em', textTransform: 'uppercase',
-            display: 'inline-flex', alignItems: 'center', gap: 6
-          }}>
-            Launch calculator <ArrowRight size={13} strokeWidth={2} />
-          </Link>
+        <div className="hidden md:flex items-center gap-7" style={{ fontSize: 14 }}>
+          {NAV_LINKS.map(link => renderLink(link))}
+          {!onCalculator && (
+            <Link to="/calculator" style={{
+              background: T.ink, color: T.surface,
+              padding: '8px 16px', fontWeight: 600,
+              fontSize: 12, letterSpacing: '0.05em', textTransform: 'uppercase',
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              textDecoration: 'none', marginLeft: 4
+            }}>
+              Launch calculator <ArrowRight size={13} strokeWidth={2} />
+            </Link>
+          )}
         </div>
 
         <button
           className="md:hidden"
           onClick={() => setOpen(!open)}
-          style={{ background: 'transparent', color: T.ink, padding: 4 }}
+          style={{ background: 'transparent', color: T.ink, padding: 4, border: 'none' }}
           aria-label="Menu"
         >
           {open ? <X size={20} /> : <Menu size={20} />}
@@ -200,21 +262,20 @@ function Nav() {
           borderTop: `1px solid ${T.rule}`,
           background: T.bg, padding: 20
         }}>
-          <div className="flex flex-col gap-3" style={{ fontSize: 15, fontWeight: 500 }}>
-            <a href="#features" onClick={() => setOpen(false)} style={{ color: T.inkSoft }}>Features</a>
-            <a href="#how-it-works" onClick={() => setOpen(false)} style={{ color: T.inkSoft }}>How it works</a>
-            <a href="#privacy" onClick={() => setOpen(false)} style={{ color: T.inkSoft }}>Privacy</a>
-            <a href="#faq" onClick={() => setOpen(false)} style={{ color: T.inkSoft }}>FAQ</a>
-            <Link to="/just-laid-off" onClick={() => setOpen(false)} style={{ color: T.inkSoft }}>Just laid off?</Link>
-            <Link to="/calculator" onClick={() => setOpen(false)} style={{
-              background: T.ink, color: T.surface,
-              padding: '10px 16px', fontWeight: 600,
-              fontSize: 12, letterSpacing: '0.05em', textTransform: 'uppercase',
-              textAlign: 'center', marginTop: 8,
-              display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6
-            }}>
-              Launch calculator <ArrowRight size={13} strokeWidth={2} />
-            </Link>
+          <div className="flex flex-col gap-3" style={{ fontSize: 15 }}>
+            {NAV_LINKS.map(link => renderLink(link, true))}
+            {!onCalculator && (
+              <Link to="/calculator" onClick={() => setOpen(false)} style={{
+                background: T.ink, color: T.surface,
+                padding: '10px 16px', fontWeight: 600,
+                fontSize: 12, letterSpacing: '0.05em', textTransform: 'uppercase',
+                textAlign: 'center', marginTop: 8,
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                textDecoration: 'none'
+              }}>
+                Launch calculator <ArrowRight size={13} strokeWidth={2} />
+              </Link>
+            )}
           </div>
         </div>
       )}

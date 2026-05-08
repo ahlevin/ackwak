@@ -17,7 +17,7 @@
 // Schema:
 //   noTax:       true if state has no income tax. Other fields ignored.
 //   flat:        true if state uses a single flat rate. Use `flatRate` only.
-//   flatRate:    Decimal (e.g. 0.0307 for 3.07%) — used when flat=true.
+//   flatRate:    Decimal (e.g. 0.0307 for 3.07%), used when flat=true.
 //   brackets:    Array of { upTo, rate } pairs for progressive systems.
 //                upTo = upper bound of the bracket in dollars (Infinity for
 //                the top bracket). rate = decimal marginal rate within bracket.
@@ -259,7 +259,7 @@ export const STATE_TAX_DATA = {
     ]
   },
 
-  // Other progressive states — top-rate-only approximations to start.
+  // Other progressive states, top-rate-only approximations to start.
   // These can be expanded with full brackets later when data verification time allows.
   AL: { name: 'Alabama', flat: false,
     brackets: [

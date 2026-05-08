@@ -343,7 +343,7 @@ function addSheet(wb, name, rows, opts = {}) {
 // IMPORT
 // ============================================================================
 // Read an exported .xlsx and reconstruct the inputs object.
-// This intentionally tolerates manual edits — missing fields use defaults,
+// This intentionally tolerates manual edits, missing fields use defaults,
 // extra fields are ignored, blank cells become null/0 as appropriate.
 export function importFromExcel(file) {
   return new Promise((resolve, reject) => {

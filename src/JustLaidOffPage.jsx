@@ -1,16 +1,16 @@
 // ============================================================================
-// JUST LAID OFF — page for someone who just lost their job
+// JUST LAID OFF, page for someone who just lost their job
 // ============================================================================
 // First page in the planned "Transitions" content section. Designed for the
 // reader who's rattled, scared, and needs a clear sequenced playbook for
-// what to do this week — paired with calm reassurance that they have more
+// what to do this week, paired with calm reassurance that they have more
 // time than they think.
 //
 // The page is also intentionally usable by readers who quit voluntarily or
 // are planning ahead. About 80% of the content applies to all three audiences.
 // Audience-specific content lives in callout cards and footer cross-references
 // to /leaving-by-choice and /planning-exit (those pages are backlogged for
-// future iterations — for now those links go to the homepage).
+// future iterations, for now those links go to the homepage).
 //
 // State picker: drives state-specific UI guidance (weekly max, weeks of
 // benefits, waiting week, taxation of UI). Top 15 states have full data;
@@ -20,6 +20,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
+import { SiteNav } from './App.jsx';
 import {
   ArrowRight, ArrowDown, AlertTriangle, CheckCircle2, Sparkles,
   ShieldCheck, Calendar, ExternalLink, Wallet, Heart,
@@ -69,7 +70,7 @@ export default function JustLaidOffPage() {
 
   const stateInfo = selectedState ? STATE_DATA[selectedState] : null;
   // For states not in our top-15 dataset, we know the full name but lack
-  // the detailed UI/tax data — fall back to a generic prompt.
+  // the detailed UI/tax data, fall back to a generic prompt.
   const stateName = useMemo(() => {
     if (!selectedState) return '';
     return ALL_STATES.find(s => s.code === selectedState)?.name || '';
@@ -77,7 +78,7 @@ export default function JustLaidOffPage() {
 
   return (
     <div style={{ background: T.bg, minHeight: '100vh', fontFamily: BODY_FONT, color: T.ink }}>
-      <PageNav />
+      <SiteNav />
       <Hero />
       <NotAdviceBanner />
       <Reassurance />
@@ -92,46 +93,6 @@ export default function JustLaidOffPage() {
       <FinalDisclaimer />
       <Footer />
     </div>
-  );
-}
-
-// ============================================================================
-// PAGE NAV
-// ============================================================================
-function PageNav() {
-  return (
-    <nav style={{
-      borderBottom: `1px solid ${T.rule}`,
-      background: T.surface,
-      position: 'sticky', top: 0, zIndex: 30
-    }}>
-      <div className="max-w-6xl mx-auto px-5 sm:px-8 py-4 flex items-center justify-between">
-        <Link to="/" style={{
-          color: T.ink, textDecoration: 'none',
-          fontFamily: DISPLAY_FONT, fontSize: 18, fontWeight: 500,
-          letterSpacing: '-0.01em', display: 'flex', alignItems: 'center', gap: 6
-        }}>
-          ackwak.com
-        </Link>
-        <div className="flex items-center gap-3">
-          <Link to="/calculator" style={{
-            color: T.inkSoft, textDecoration: 'none',
-            fontSize: 12, fontWeight: 500,
-            letterSpacing: '0.05em', textTransform: 'uppercase',
-            padding: '8px 12px'
-          }}>
-            Calculators
-          </Link>
-          <Link to="/calculator" style={{
-            background: T.ink, color: T.surface, textDecoration: 'none',
-            padding: '8px 14px', fontWeight: 600,
-            fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase'
-          }}>
-            Launch app
-          </Link>
-        </div>
-      </div>
-    </nav>
   );
 }
 
@@ -259,7 +220,7 @@ function StatePicker({ selectedState, onChange }) {
 }
 
 // ============================================================================
-// PLAYBOOK — the seven days
+// PLAYBOOK, the seven days
 // ============================================================================
 function Playbook({ stateInfo, stateName, selectedState }) {
   return (
@@ -640,19 +601,19 @@ function CrossReferences() {
         <SectionHeading
           eyebrow="Different situation?"
           title="Other paths through a transition"
-          desc="This guide assumes a sudden, involuntary layoff. If your circumstances are different, these guides will be more useful (coming soon)."
+          desc="This guide assumes a sudden, involuntary layoff. If your circumstances are different, these guides may be more useful."
         />
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <CrossRefCard
-            label="Coming soon"
-            title="Leaving by choice"
-            body="Quit, fired-for-cause, retired early. UI eligibility nuances, gap-coverage timing, no severance to negotiate but more time to plan."
-            disabled
+            label="Available now"
+            title="Leaving on your terms"
+            body="Voluntary departures: quitting, retiring early, planning an exit. Combined guide that walks through the timeline from months out through the first weeks after leaving."
+            to="/leaving-on-your-terms"
           />
           <CrossRefCard
             label="Coming soon"
-            title="Planning your exit"
-            body="Months out from leaving. Negotiation tactics, optimal timing for severance and equity vesting, tax-smart exit calendar."
+            title="Transitions hub"
+            body="A single starting point that routes you to the guide that fits your situation. Coming as the next set of pages comes online."
             disabled
           />
         </div>
@@ -661,7 +622,7 @@ function CrossReferences() {
   );
 }
 
-function CrossRefCard({ label, title, body, disabled }) {
+function CrossRefCard({ label, title, body, disabled, to }) {
   const card = (
     <div style={{
       background: disabled ? T.surfaceWarm : T.surface,
@@ -691,7 +652,8 @@ function CrossRefCard({ label, title, body, disabled }) {
       </p>
     </div>
   );
-  return card;
+  if (disabled || !to) return card;
+  return <Link to={to} style={{ textDecoration: 'none' }}>{card}</Link>;
 }
 
 // ============================================================================
@@ -722,6 +684,9 @@ function Footer() {
             </Link>
             <Link to="/just-laid-off" style={{ display: 'block', fontSize: 13, color: T.ink, textDecoration: 'none', marginBottom: 6 }}>
               Just laid off
+            </Link>
+            <Link to="/leaving-on-your-terms" style={{ display: 'block', fontSize: 13, color: T.ink, textDecoration: 'none', marginBottom: 6 }}>
+              Leaving on your terms
             </Link>
           </div>
         </div>

@@ -801,7 +801,7 @@ function simulateRunway(inp, mode = 'typical') {
     }
   }
 
-  // Other income (pension, royalties, etc.) — continues if currently active
+  // Other income (pension, royalties, etc.), continues if currently active
   let altIncomeMonthly = 0;
   if (inp.altIncome > 0) {
     const altStart = inp.altStartAge ?? inp.currentAge;
@@ -1022,33 +1022,33 @@ function findModerateRetirementAge(inputs) {
 // FORMATTING
 // ============================================================================
 const fmt$ = (n) => {
-  if (n == null || isNaN(n)) return '—';
+  if (n == null || isNaN(n)) return ',';
   const abs = Math.abs(n);
   if (abs >= 1_000_000) return `${n < 0 ? '-' : ''}$${(abs / 1_000_000).toFixed(2)}M`;
   if (abs >= 1_000) return `${n < 0 ? '-' : ''}$${(abs / 1_000).toFixed(0)}K`;
   return `${n < 0 ? '-' : ''}$${abs.toFixed(0)}`;
 };
-const fmt$Full = (n) => n == null || isNaN(n) ? '—' : `$${Math.round(n).toLocaleString()}`;
+const fmt$Full = (n) => n == null || isNaN(n) ? ',' : `$${Math.round(n).toLocaleString()}`;
 const fmtPct = (n) => `${(n * 100).toFixed(1)}%`;
 
 // ============================================================================
 // REUSABLE INPUTS
 // ============================================================================
 // Slider with a click-to-edit value display. Tap or click the number on the
-// right to type a value directly — useful when the slider is hard to nudge
+// right to type a value directly, useful when the slider is hard to nudge
 // precisely on touch screens, or when the user knows the exact value they want.
 // The two controls stay synced; whichever is easier in the moment.
 function Slider({ label, value, onChange, min, max, step, fmt = (v) => v, suffix = '', help }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
 
-  // Begin editing — initialize the input with the current value as a clean string.
+  // Begin editing, initialize the input with the current value as a clean string.
   const startEditing = () => {
     setDraft(String(value));
     setEditing(true);
   };
 
-  // Commit the edit — clamp to range, snap to step, fall back to current value if invalid.
+  // Commit the edit, clamp to range, snap to step, fall back to current value if invalid.
   const commit = () => {
     const parsed = parseFloat(draft);
     if (!isNaN(parsed)) {
@@ -1254,7 +1254,7 @@ function StateTaxPicker({ stateCode, useStateBrackets, stateRate, married = fals
     onUseBracketsChange(!!code);
   };
 
-  // What the user actually pays at their income — far more meaningful than top marginal.
+  // What the user actually pays at their income, far more meaningful than top marginal.
   let stateDesc = null;
   let effectiveLine = null;
   if (data) {
@@ -1318,12 +1318,12 @@ function StateTaxPicker({ stateCode, useStateBrackets, stateRate, married = fals
         )}
         {stateCode && data && !data.noTax && (
           <p className="text-[10px] mt-1" style={{ color: T.muted, fontStyle: 'italic', lineHeight: 1.45 }}>
-            Data as of {STATE_TAX_DATA_AS_OF}. Planning estimate only — does not include local/city taxes, deductions, credits, or special rules for retirement income. For tax preparation, consult a tax professional.
+            Data as of {STATE_TAX_DATA_AS_OF}. Planning estimate only, does not include local/city taxes, deductions, credits, or special rules for retirement income. For tax preparation, consult a tax professional.
           </p>
         )}
       </div>
 
-      {/* Manual flat-rate override — disabled when a state is picked, but visible
+      {/* Manual flat-rate override, disabled when a state is picked, but visible
           so the user can see what's being used. Toggle to enable manual control. */}
       <div style={{
         background: useStateBrackets ? T.surfaceWarm : 'transparent',
@@ -1469,13 +1469,13 @@ function NetWorthView({ inp, sims }) {
             }}>
               Your net worth is <strong style={{ color: netWorth >= 0 ? T.ink : T.oxblood, fontWeight: 700 }}>{fmt$Full(netWorth)}</strong>
               {netWorth >= 0 && totalLiabilities > 0 && (
-                <>{` — `}<em style={{ fontStyle: 'italic' }}>{fmt$Full(totalAssets)} in assets minus {fmt$Full(totalLiabilities)} in liabilities</em>.</>
+                <>{`, `}<em style={{ fontStyle: 'italic' }}>{fmt$Full(totalAssets)} in assets minus {fmt$Full(totalLiabilities)} in liabilities</em>.</>
               )}
               {netWorth >= 0 && totalLiabilities === 0 && (
                 <>, fully unencumbered with <em style={{ fontStyle: 'italic' }}>no liabilities</em>.</>
               )}
               {netWorth < 0 && (
-                <> — liabilities currently exceed assets.</>
+                <>, liabilities currently exceed assets.</>
               )}
             </p>
             <div className="grid grid-cols-3 gap-3 sm:gap-6 pt-4 sm:pt-6" style={{ borderTop: `1px solid ${T.ruleLight}` }}>
@@ -1525,12 +1525,12 @@ function NetWorthView({ inp, sims }) {
           />
           <HealthRow
             label="Real estate concentration"
-            value={totalAssets > 0 ? fmtPct(totalProperty / totalAssets) : '—'}
+            value={totalAssets > 0 ? fmtPct(totalProperty / totalAssets) : ','}
             sub={totalProperty / totalAssets > 0.50 ? 'Concentrated in property' : 'Diversified'}
           />
           <HealthRow
             label="Retirement-tax-advantaged"
-            value={totalAssets > 0 ? fmtPct((today.k401 + total529) / totalAssets) : '—'}
+            value={totalAssets > 0 ? fmtPct((today.k401 + total529) / totalAssets) : ','}
             sub="401(k) + 529, percent of assets"
           />
         </div>
@@ -1583,7 +1583,7 @@ function NetWorthView({ inp, sims }) {
             </span>
           </div>
           {liabilityBreakdown.length === 0 ? (
-            <p className="text-[12px]" style={{ color: T.muted, fontStyle: 'italic' }}>No liabilities — fully unencumbered.</p>
+            <p className="text-[12px]" style={{ color: T.muted, fontStyle: 'italic' }}>No liabilities, fully unencumbered.</p>
           ) : (
             <div className="space-y-3">
               {liabilityBreakdown.map(l => {
@@ -1605,7 +1605,7 @@ function NetWorthView({ inp, sims }) {
             </div>
           )}
 
-          {/* Empty state placeholder when no liabilities — keeps layout balanced */}
+          {/* Empty state placeholder when no liabilities, keeps layout balanced */}
           {liabilityBreakdown.length === 0 && (
             <div style={{ marginTop: 12, padding: 16, background: T.emeraldSoft, border: `1px solid ${T.emerald}30` }}>
               <Check size={14} strokeWidth={2} style={{ color: T.emerald, marginBottom: 8 }} />
@@ -1627,7 +1627,7 @@ function NetWorthView({ inp, sims }) {
           How your wealth is distributed across categories.
         </p>
 
-        {/* Stacked bar — assets vs liabilities scaled to a common axis */}
+        {/* Stacked bar, assets vs liabilities scaled to a common axis */}
         <div className="mb-2 flex items-baseline justify-between">
           <span style={{ fontSize: 10, color: T.emerald, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em' }}>Assets</span>
           <span style={{ fontFamily: MONO_FONT, fontSize: 11, color: T.ink }}>{fmt$Full(totalAssets)}</span>
@@ -1665,7 +1665,7 @@ function NetWorthView({ inp, sims }) {
           }) : null}
         </div>
         <p className="text-[10px] mt-2" style={{ color: T.muted, fontStyle: 'italic' }}>
-          Liabilities bar is scaled to the same axis as assets — width visually represents debt as a fraction of total assets ({fmtPct(ratio)}).
+          Liabilities bar is scaled to the same axis as assets, width visually represents debt as a fraction of total assets ({fmtPct(ratio)}).
         </p>
       </div>
     </>
@@ -2691,7 +2691,7 @@ export default function RetirementReadiness() {
     try {
       const inputs = await importFromExcel(file);
       const name = file.name.replace(/\.(retirement\.)?xlsx$/i, '');
-      // Excel imports always run through the migration framework too — they may
+      // Excel imports always run through the migration framework too, they may
       // be missing newer fields, but the migration adds defaults safely.
       const result = migrateScenario({ ...inputs, schemaVersion: 1 });
       setInp(result.inputs);
@@ -2950,12 +2950,12 @@ export default function RetirementReadiness() {
               <p className="mt-3 max-w-2xl text-[13px] sm:text-[14px] leading-relaxed" style={{ color: T.inkSoft }}>
                 {activeView === 'networth' && (
                   <>
-                    A snapshot of where you stand today. Add up everything you own (cash, retirement accounts, properties, vehicles, 529 plans, other assets), subtract everything you owe (mortgages, loans, credit cards), and see your net worth with a clean breakdown of how it's composed. <strong style={{ color: T.ink }}>This is the foundation</strong> — your inputs here power the Retirement Readiness and Job Loss Runway calculators.
+                    A snapshot of where you stand today. Add up everything you own (cash, retirement accounts, properties, vehicles, 529 plans, other assets), subtract everything you owe (mortgages, loans, credit cards), and see your net worth with a clean breakdown of how it's composed. <strong style={{ color: T.ink }}>This is the foundation</strong>, your inputs here power the Retirement Readiness and Job Loss Runway calculators.
                   </>
                 )}
                 {activeView === 'retirement' && (
                   <>
-                    Will your money last through retirement? This calculator projects your finances year-by-year from today through your full life expectancy, simulating income, expenses, taxes, account growth, mortgage paydown, education costs, and inheritances along the way. <strong style={{ color: T.ink }}>Three risk scenarios</strong> (conservative, moderate, optimistic) run in parallel so you see your full range of outcomes — not just one rosy projection.
+                    Will your money last through retirement? This calculator projects your finances year-by-year from today through your full life expectancy, simulating income, expenses, taxes, account growth, mortgage paydown, education costs, and inheritances along the way. <strong style={{ color: T.ink }}>Three risk scenarios</strong> (conservative, moderate, optimistic) run in parallel so you see your full range of outcomes, not just one rosy projection.
                   </>
                 )}
                 {activeView === 'runway' && (
@@ -3175,9 +3175,9 @@ export default function RetirementReadiness() {
             </p>
 
             <div className="space-y-3">
-              <RecRow label="Aggressive (high risk)" age={moderateAge && moderateAge < (safeAge || 999) ? moderateAge : '—'} hint="Money lasts under moderate assumptions" />
-              <RecRow label="Balanced (moderate risk)" age={moderateAge !== null ? moderateAge : '—'} hint="Comfortable margin in normal markets" />
-              <RecRow label="Conservative (low risk)" age={safeAge !== null ? safeAge : '—'} hint="Survives bad markets & longer life" highlight />
+              <RecRow label="Aggressive (high risk)" age={moderateAge && moderateAge < (safeAge || 999) ? moderateAge : ','} hint="Money lasts under moderate assumptions" />
+              <RecRow label="Balanced (moderate risk)" age={moderateAge !== null ? moderateAge : ','} hint="Comfortable margin in normal markets" />
+              <RecRow label="Conservative (low risk)" age={safeAge !== null ? safeAge : ','} hint="Survives bad markets & longer life" highlight />
             </div>
           </div>
         </div>
@@ -3299,7 +3299,7 @@ export default function RetirementReadiness() {
             {totalChildren > 0 && (
               <AutoStat
                 label="529 covers college"
-                value={coveragePct !== null ? `${coveragePct}%` : '—'}
+                value={coveragePct !== null ? `${coveragePct}%` : ','}
                 tone={coveragePct >= 90 ? 'good' : coveragePct >= 50 ? undefined : 'bad'}
               />
             )}
@@ -3499,7 +3499,7 @@ export default function RetirementReadiness() {
               ))}
               {totalChildren > 0 && (
                 <p className="text-[11px] mt-2" style={{ color: T.muted, fontStyle: 'italic' }}>
-                  Education future costs (tuition, durations, school stages) live in the Retirement tab — they affect the long-term projection but not today's net worth.
+                  Education future costs (tuition, durations, school stages) live in the Retirement tab, they affect the long-term projection but not today's net worth.
                 </p>
               )}
             </Section>
@@ -3783,7 +3783,7 @@ export default function RetirementReadiness() {
             </Section>
           );
 
-          // Stress test assumptions — only relevant on Job Loss Runway tab.
+          // Stress test assumptions, only relevant on Job Loss Runway tab.
           // Severance, UI, COBRA, expense reduction, gig income, partner income.
           const stressTestSection = (
             <Section icon={Wind} title="Stress test assumptions" defaultOpen={open.stressTest} badge={newBadge}>
@@ -3824,11 +3824,11 @@ export default function RetirementReadiness() {
                   <Slider label="Starts in month" value={inp.gigStartMonth} onChange={set('gigStartMonth')} min={1} max={12} step={1}
                     help="Realistic ramp-up: month 2-3 to set up profiles, find clients, get first paychecks." />
                   <Slider label="Continues through month" value={inp.gigEndMonth} onChange={set('gigEndMonth')} min={Math.max(1, inp.gigStartMonth || 1)} max={60} step={1}
-                    help="When you'd stop gig work — typically when you find permanent employment." />
+                    help="When you'd stop gig work, typically when you find permanent employment." />
                 </div>
               )}
               <p className="text-[11px] mt-1 mb-2" style={{ color: T.muted, fontStyle: 'italic', lineHeight: 1.5 }}>
-                Note: in many states, gig earnings reduce unemployment benefits dollar-for-dollar above a small disregard. The model does not auto-reduce UI for gig income — set gig income slightly below your true expected earnings if you want to be conservative.
+                Note: in many states, gig earnings reduce unemployment benefits dollar-for-dollar above a small disregard. The model does not auto-reduce UI for gig income, set gig income slightly below your true expected earnings if you want to be conservative.
               </p>
 
               {inp.married && (
@@ -3855,7 +3855,7 @@ export default function RetirementReadiness() {
             // Properties, vehicles, and similar compound items keep their internal
             // structure (value + associated debt in one card). The card itself is an
             // ASSET (its net contribution to net worth is value minus debt). We don't
-            // try to tear those apart across columns — the math still works.
+            // try to tear those apart across columns, the math still works.
             return (
               <>
                 <SectionGroup
@@ -3912,7 +3912,7 @@ export default function RetirementReadiness() {
                 </SectionGroup>
                 <SectionGroup
                   title="From Net Worth"
-                  subtext="Already filled from your Net Worth view. Edits here flow back to Net Worth automatically. Sections start collapsed since you've seen them — expand if you need to revise."
+                  subtext="Already filled from your Net Worth view. Edits here flow back to Net Worth automatically. Sections start collapsed since you've seen them, expand if you need to revise."
                   accentColor={BADGE_FROM_NW.color}
                 >
                   {aboutYouSection}
@@ -3941,7 +3941,7 @@ export default function RetirementReadiness() {
                 </SectionGroup>
                 <SectionGroup
                   title="From Net Worth"
-                  subtext="Already filled from your Net Worth view. Edits here flow back to Net Worth automatically. Sections start collapsed since you've seen them — expand if you need to revise."
+                  subtext="Already filled from your Net Worth view. Edits here flow back to Net Worth automatically. Sections start collapsed since you've seen them, expand if you need to revise."
                   accentColor={BADGE_FROM_NW.color}
                 >
                   {aboutYouSection}
@@ -4886,7 +4886,7 @@ function VehicleCard({ vehicle, onUpdate, onRemove, currentAge, lifeExpectancy }
                   ${vehicle.loanMonthly}/mo
                 </div>
                 <div className="text-[10px]" style={{ color: T.muted, fontFamily: MONO_FONT }}>
-                  thru age {vehicle.leaseEndAge ?? '—'}
+                  thru age {vehicle.leaseEndAge ?? ','}
                 </div>
               </>
             ) : (
@@ -5832,7 +5832,7 @@ function MonthAuditDrawer({ month, scenario, onClose, onScenarioChange, runways,
                 Month {monthData.month} audit
               </h2>
               <p className="text-[12px] mt-1" style={{ color: monthData.exhausted ? T.oxblood : T.muted }}>
-                {monthData.exhausted ? 'Liquid exhausted this month — only 401(k) penalty zone remains' : monthsRemaining}
+                {monthData.exhausted ? 'Liquid exhausted this month, only 401(k) penalty zone remains' : monthsRemaining}
               </p>
             </div>
             <button onClick={onClose} className="p-1 hover:opacity-60" style={{ background: 'transparent' }}>
@@ -5910,7 +5910,7 @@ function MonthAuditDrawer({ month, scenario, onClose, onScenarioChange, runways,
             Income this month
           </h3>
           {incomeLines.length === 0 ? (
-            <div className="text-[12px] mb-6" style={{ color: T.muted, fontStyle: 'italic' }}>No income this month — running entirely off liquid savings.</div>
+            <div className="text-[12px] mb-6" style={{ color: T.muted, fontStyle: 'italic' }}>No income this month, running entirely off liquid savings.</div>
           ) : (
             <div className="mb-6">
               {incomeLines.map(line => (
@@ -5934,7 +5934,7 @@ function MonthAuditDrawer({ month, scenario, onClose, onScenarioChange, runways,
             Liquid accounts at end of month
           </h3>
           <p className="text-[12px] mb-3" style={{ color: T.muted, fontStyle: 'italic' }}>
-            {netFlow < 0 ? `Drew ${fmt$Full(-netFlow)} from ${labelForAccount(monthData.drawnFrom)} this month.` : 'Surplus this month — no draws needed.'}
+            {netFlow < 0 ? `Drew ${fmt$Full(-netFlow)} from ${labelForAccount(monthData.drawnFrom)} this month.` : 'Surplus this month, no draws needed.'}
           </p>
           <div className="mb-6">
             {accountLines.map(line => (
@@ -5964,7 +5964,7 @@ function MonthAuditDrawer({ month, scenario, onClose, onScenarioChange, runways,
           <div className="p-3" style={{ background: T.amberSoft, border: `1px solid ${T.amber}40` }}>
             <div className="flex items-baseline justify-between mb-1">
               <span style={{ fontSize: 11, color: T.amber, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-                401(k) — penalty zone {monthData.exhausted ? '(now in play)' : '(untouched)'}
+                401(k), penalty zone {monthData.exhausted ? '(now in play)' : '(untouched)'}
               </span>
               <span style={{ fontFamily: MONO_FONT, fontSize: 13, color: T.amber, fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>
                 {fmt$Full(monthData.k401)}
@@ -5972,8 +5972,8 @@ function MonthAuditDrawer({ month, scenario, onClose, onScenarioChange, runways,
             </div>
             <p className="text-[11px]" style={{ color: T.inkSoft, lineHeight: 1.5 }}>
               {inp.currentAge >= 59.5
-                ? 'You\'re past 59½ — withdrawals are allowed without the 10% penalty, but still taxed as ordinary income.'
-                : 'Withdrawing before age 59½ triggers a 10% federal penalty plus ordinary income tax — typically 30–40% combined. Consider a 401(k) loan instead if your plan allows it.'}
+                ? 'You\'re past 59½, withdrawals are allowed without the 10% penalty, but still taxed as ordinary income.'
+                : 'Withdrawing before age 59½ triggers a 10% federal penalty plus ordinary income tax, typically 30–40% combined. Consider a 401(k) loan instead if your plan allows it.'}
             </p>
           </div>
         </div>
@@ -6321,7 +6321,7 @@ function ScenarioPanel({
 
           {/* Format groups */}
           <div className="space-y-3">
-            {/* Excel — recommended */}
+            {/* Excel, recommended */}
             <div className="p-3" style={{ background: T.emeraldSoft, border: `1px solid ${T.emerald}30` }}>
               <div className="flex items-start gap-2 mb-2">
                 <FileSpreadsheet size={14} strokeWidth={1.5} style={{ color: T.emerald, marginTop: 2, flexShrink: 0 }} />

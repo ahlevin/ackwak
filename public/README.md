@@ -8,4 +8,4 @@ For GitHub Pages with a custom domain, add a `CNAME` file here containing your d
 ackwak.com
 ```
 
-For Cloudflare Pages, you don't need a CNAME file — custom domains are configured in the Cloudflare dashboard.
+For Cloudflare Pages, you don't need a CNAME file, custom domains are configured in the Cloudflare dashboard.

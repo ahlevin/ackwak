@@ -8,7 +8,7 @@
 // Sources: state Department of Labor websites, US Department of Labor data,
 // remotelaws.com (Mar 2026), savingtoinvest.com (Mar 2026), Equifax 2026 Wage
 // Base Information (Mar 2026). Numbers verified to that point. UI maximums
-// typically adjust annually around July 1 — users should always verify their
+// typically adjust annually around July 1, users should always verify their
 // state's current figures on the official state portal before relying on them.
 //
 // Schema:

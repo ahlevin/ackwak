@@ -22,9 +22,9 @@ const PROPERTY_TYPE_LABELS = {
   vacation: 'Vacation home'
 };
 
-const fmt$ = (n) => n == null || isNaN(n) ? '—' : `$${Math.round(n).toLocaleString()}`;
-const fmtPct = (n) => n == null || isNaN(n) ? '—' : `${(n * 100).toFixed(1)}%`;
-const fmtAge = (n) => n == null ? '—' : String(n);
+const fmt$ = (n) => n == null || isNaN(n) ? ',' : `$${Math.round(n).toLocaleString()}`;
+const fmtPct = (n) => n == null || isNaN(n) ? ',' : `${(n * 100).toFixed(1)}%`;
+const fmtAge = (n) => n == null ? ',' : String(n);
 const yesNo = (b) => b ? 'Yes' : 'No';
 const escape = (s) => String(s == null ? '' : s)
   .replace(/&/g, '&amp;')
@@ -192,7 +192,7 @@ function renderHeadlineSummary(inp, sims) {
   if (!sims) return '';
 
   const survives = (sim) => sim.runOutAge === null;
-  const rec = sims.cons.runOutAge === null ? 'Conservative survives — strong margin.'
+  const rec = sims.cons.runOutAge === null ? 'Conservative survives, strong margin.'
             : sims.mod.runOutAge === null ? 'Moderate scenario survives, but conservative does not.'
             : `Money runs out under moderate at age ${sims.mod.runOutAge}.`;
 
@@ -260,7 +260,7 @@ function renderIncomeAndSavings(inp) {
     <h3>Current balances</h3>
     <table>
       <tr><th>Bucket</th><th class="num">Balance</th><th class="num">Return</th></tr>
-      <tr><td>Cash</td><td class="num">${fmt$(inp.cash)}</td><td class="num">—</td></tr>
+      <tr><td>Cash</td><td class="num">${fmt$(inp.cash)}</td><td class="num">,</td></tr>
       <tr><td>Money market</td><td class="num">${fmt$(inp.moneyMarket)}</td><td class="num">${fmtPct(inp.mmRate)}</td></tr>
       <tr><td>CDs</td><td class="num">${fmt$(inp.cd)}</td><td class="num">${fmtPct(inp.cdRate)}</td></tr>
       <tr><td>Brokerage</td><td class="num">${fmt$(inp.brokerage)}</td><td class="num">${fmtPct(inp.brokerageRate)}</td></tr>
@@ -292,8 +292,8 @@ function renderProperties(inp) {
       <td class="num">${fmt$(p.mortgageMonthly)}</td>
       <td class="num">${fmtPct(p.appreciation)}</td>
       <td class="num">${fmtPct(p.propertyTaxRate)}</td>
-      <td class="num">${p.type === 'rental' ? fmt$(p.netRentalIncome) : '—'}</td>
-      <td>${p.type === 'rental' ? `${p.rentalStartAge ?? 'now'}–${p.rentalEndAge ?? 'forever'}` : '—'}</td>
+      <td class="num">${p.type === 'rental' ? fmt$(p.netRentalIncome) : ','}</td>
+      <td>${p.type === 'rental' ? `${p.rentalStartAge ?? 'now'}–${p.rentalEndAge ?? 'forever'}` : ','}</td>
     </tr>`;
   }
   return `
@@ -319,11 +319,11 @@ function renderVehicles(inp) {
     rows += `<tr>
       <td>${escape(v.label)}</td>
       <td>${v.lease ? 'Leased' : 'Owned'}</td>
-      <td class="num">${v.lease ? '—' : fmt$(v.value)}</td>
-      <td class="num">${v.lease ? '—' : fmtPct(v.depreciation)}</td>
-      <td class="num">${v.lease ? '—' : fmt$(v.loanBalance)}</td>
+      <td class="num">${v.lease ? ',' : fmt$(v.value)}</td>
+      <td class="num">${v.lease ? ',' : fmtPct(v.depreciation)}</td>
+      <td class="num">${v.lease ? ',' : fmt$(v.loanBalance)}</td>
       <td class="num">${fmt$(v.loanMonthly)}/mo</td>
-      <td>${v.lease ? `Until age ${v.leaseEndAge ?? '—'}` : '—'}</td>
+      <td>${v.lease ? `Until age ${v.leaseEndAge ?? ','}` : ','}</td>
     </tr>`;
   }
   return `

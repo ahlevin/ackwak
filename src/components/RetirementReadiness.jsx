@@ -2163,13 +2163,13 @@ function GetStartedBanner() {
         letterSpacing: '-0.01em', color: T.ink, lineHeight: 1.15,
         marginBottom: 10, marginTop: 0
       }}>
-        First time? Fill in your inputs below.
+        Fill in your inputs below.
       </h3>
       <p style={{
         fontSize: 14, lineHeight: 1.55, color: T.inkSoft,
         marginBottom: 16, marginTop: 0, maxWidth: 640
       }}>
-        The numbers above are computed from placeholder values, not your data. Scroll down to the Inputs section and replace them with your real life: age, income, savings, properties, retirement age. The same inputs power all three views.
+        Jump to the Inputs section and make whatever updates you want to model for your situation. The same inputs power all three views.
       </p>
       <button
         onClick={jumpToInputs}

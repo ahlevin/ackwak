@@ -776,7 +776,7 @@ function Footer() {
               ackwak.com
             </Link>
             <p style={{ fontSize: 13, color: T.inkSoft, lineHeight: 1.55, marginTop: 12, maxWidth: 420 }}>
-              A free, private wealth calculator and a growing library of guides for people in work transitions. No accounts, no tracking.
+              Free, private calculators and a growing library of guides for people in life transitions. No accounts, no tracking.
             </p>
           </div>
           <div>

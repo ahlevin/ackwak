@@ -119,7 +119,7 @@ function AudienceCards() {
             icon={HandshakeIcon}
             label="It was my call"
             title="Leaving on your terms"
-            blurb="Voluntary, planned. From months out (thinking about it) through giving notice and the first weeks free. Different financial dynamics than a layoff."
+            blurb="Quitting for a new job, starting your own thing, retiring early, or just done with the role. Walks through the timeline from months out (thinking about it) through giving notice and the first weeks free."
             sample={[
               'Four-phase timeline from months out to after',
               'Counter-offers, vesting, equity windows',
@@ -236,10 +236,13 @@ function NotSureGuidance() {
             Not sure which one fits?
           </div>
           <p style={{ fontSize: 14, lineHeight: 1.55, color: T.ink, margin: 0, marginBottom: 8 }}>
-            Some situations sit between the two. If you're <strong>worried about an upcoming layoff but it hasn't happened yet</strong>, the Just Laid Off guide is mostly forward-looking advice and is probably more useful. If you're <strong>quitting because you think you're about to be laid off</strong>, both guides have content that applies; start with Leaving on Your Terms.
+            Most readers self-sort easily on one question: <strong>was it your decision?</strong> If yes, Leaving on Your Terms is for you, whether you're heading to a new job, starting your own thing, retiring early, taking time off, or just done with the current role. If the decision wasn't yours, Just Laid Off is the right guide.
+          </p>
+          <p style={{ fontSize: 13, lineHeight: 1.55, color: T.inkSoft, margin: 0, marginBottom: 8 }}>
+            A few situations sit between the two: if you're worried about an upcoming layoff but it hasn't happened yet, the Just Laid Off guide's planning content is probably more useful. If you're quitting because you suspect you're about to be laid off, both guides apply, but start with Leaving on Your Terms.
           </p>
           <p style={{ fontSize: 13, lineHeight: 1.55, color: T.inkSoft, margin: 0 }}>
-            The financial topics overlap a lot (health insurance, 401(k), runway, taxes), so reading both is reasonable if your situation is messy.
+            The financial topics (health insurance, 401(k), runway, taxes) overlap a lot. Reading both is reasonable if your situation is messy.
           </p>
         </div>
       </div>
@@ -314,7 +317,7 @@ function WhatsHere() {
                 fontWeight: 500, color: T.surface, letterSpacing: '-0.01em',
                 margin: 0, lineHeight: 1.2
               }}>
-                The wealth calculator
+                The calculators
               </h3>
               <p style={{ fontSize: 13, color: '#C9C4BB', margin: '8px 0 0 0', lineHeight: 1.5 }}>
                 Net worth, retirement readiness, and job loss runway. All free, all private, all in your browser.
@@ -388,7 +391,7 @@ function Footer() {
               ackwak.com
             </Link>
             <p style={{ fontSize: 13, color: T.inkSoft, lineHeight: 1.55, marginTop: 12, maxWidth: 420 }}>
-              A free, private wealth calculator and a growing library of guides for people in work transitions. No accounts, no tracking.
+              Free, private calculators and a growing library of guides for people in life transitions. No accounts, no tracking.
             </p>
           </div>
           <div>

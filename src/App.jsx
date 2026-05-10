@@ -324,7 +324,7 @@ function Hero() {
           fontSize: 'clamp(16px, 2vw, 20px)', lineHeight: 1.5,
           color: T.inkSoft, maxWidth: 720, marginBottom: 36
         }}>
-          A free, private wealth calculator and a real-world guide for the moments your life shifts. See your net worth today, when you can retire, and how long your runway lasts. Plus practical content for layoffs, voluntary departures, and other transitions.
+          A set of free, private calculators and practical guides for the moments your life shifts. See your net worth today, when you can retire, and how long your runway lasts. Plus practical content for layoffs, voluntary departures, and other transitions.
         </p>
 
         <div className="flex items-center gap-3 flex-wrap mb-12">

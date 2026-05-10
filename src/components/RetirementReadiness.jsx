@@ -1117,18 +1117,20 @@ function Slider({ label, value, onChange, min, max, step, fmt = (v) => v, suffix
             onClick={startEditing}
             type="button"
             // Style the value as a button that doesn't look like a button until hover/focus.
+            // Always-visible dashed underline + small pencil cue signals click-to-edit
+            // on first glance (works on touch devices too where there's no hover).
             // Click to edit; on touch devices a tap also opens the editor.
             style={{
               fontFamily: DISPLAY_FONT, fontWeight: 500, fontSize: 18, color: T.ink,
               fontVariantNumeric: 'tabular-nums',
               background: 'transparent', border: 'none',
-              borderBottom: `1px dashed ${T.ruleLight}`,
+              borderBottom: `1px dashed ${T.muted}`,
               padding: '0 2px', cursor: 'text',
               transition: 'border-color 120ms ease',
             }}
             onMouseEnter={(e) => e.currentTarget.style.borderBottomColor = T.ink}
-            onMouseLeave={(e) => e.currentTarget.style.borderBottomColor = T.ruleLight}
-            title="Click to type a value"
+            onMouseLeave={(e) => e.currentTarget.style.borderBottomColor = T.muted}
+            title="Click or tap to type a value"
           >
             {fmt(value)}{suffix}
           </button>
@@ -1214,17 +1216,19 @@ function EditablePct({ pct, onCommit }) {
     <button
       onClick={start}
       type="button"
+      // Always-visible dashed underline so users on first glance (and on touch
+      // devices with no hover) see the click-to-edit affordance.
       style={{
         fontFamily: MONO_FONT, fontSize: 13, fontWeight: 600,
         color: T.ink, minWidth: 40, textAlign: 'right',
         background: 'transparent', border: 'none',
-        borderBottom: `1px dashed ${T.ruleLight}`,
+        borderBottom: `1px dashed ${T.muted}`,
         padding: '0 2px', cursor: 'text',
         transition: 'border-color 120ms ease',
       }}
       onMouseEnter={(e) => e.currentTarget.style.borderBottomColor = T.ink}
-      onMouseLeave={(e) => e.currentTarget.style.borderBottomColor = T.ruleLight}
-      title="Click to type a value"
+      onMouseLeave={(e) => e.currentTarget.style.borderBottomColor = T.muted}
+      title="Click or tap to type a value"
     >
       {pct}%
     </button>
@@ -2056,6 +2060,131 @@ function RunwayTooltip({ active, payload, label }) {
       <div style={{ marginTop: 4, color: T.muted, fontSize: 10 }}>
         Monthly expenses: {fmt$Full(d.expenses)}
       </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// GET STARTED BANNER
+// ============================================================================
+// First-time users land on the calculator and see computed values from default
+// inputs (a placeholder 45-year-old married couple making $175K). This is
+// confusing because there's no signpost saying "your inputs go here."
+//
+// The banner solves that. It sits above all tab outputs and says clearly:
+//   - These are placeholder values
+//   - Your inputs go below
+//   - Jump to inputs button scrolls smoothly to #calculator-inputs
+//
+// Dismissible (saves to localStorage). After dismissal, the user sees a
+// small persistent chip that still lets them jump to inputs, so they're
+// never "stranded" at the top of the page with no clear next step.
+function GetStartedBanner() {
+  const STORAGE_KEY = 'ackwak.calculator.bannerDismissed';
+  const [dismissed, setDismissed] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    try { return window.localStorage.getItem(STORAGE_KEY) === 'true'; }
+    catch (e) { return false; }
+  });
+
+  const dismiss = () => {
+    setDismissed(true);
+    try { window.localStorage.setItem(STORAGE_KEY, 'true'); }
+    catch (e) { /* localStorage might be disabled, no big deal */ }
+  };
+
+  const jumpToInputs = (e) => {
+    e.preventDefault();
+    const el = document.getElementById('calculator-inputs');
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  // Dismissed state: a small chip in the corner with just "Jump to inputs"
+  // so returning users still have an easy path to edit their data but the
+  // wall-of-text banner doesn't keep appearing.
+  if (dismissed) {
+    return (
+      <div style={{ marginBottom: 20 }}>
+        <button
+          onClick={jumpToInputs}
+          type="button"
+          style={{
+            background: T.surface, border: `1px solid ${T.rule}`,
+            padding: '8px 14px',
+            fontFamily: BODY_FONT, fontSize: 12, fontWeight: 600,
+            color: T.inkSoft, letterSpacing: '0.05em', textTransform: 'uppercase',
+            cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6,
+            transition: 'background 120ms, border-color 120ms'
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = T.surfaceWarm; e.currentTarget.style.borderColor = T.ink; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = T.surface; e.currentTarget.style.borderColor = T.rule; }}
+          aria-label="Jump to inputs"
+        >
+          ↓ Jump to inputs
+        </button>
+      </div>
+    );
+  }
+
+  // First visit (or never dismissed): full banner with explanation and CTA.
+  return (
+    <div style={{
+      background: T.surface,
+      border: `1px solid ${T.rule}`,
+      borderLeft: `4px solid ${T.emerald}`,
+      padding: 'clamp(16px, 3vw, 24px)',
+      marginBottom: 24,
+      position: 'relative'
+    }}>
+      <button
+        onClick={dismiss}
+        type="button"
+        aria-label="Dismiss this banner"
+        style={{
+          position: 'absolute', top: 10, right: 10,
+          background: 'transparent', border: 'none', cursor: 'pointer',
+          color: T.muted, padding: 6, lineHeight: 1
+        }}
+      >
+        <X size={16} strokeWidth={2} />
+      </button>
+      <div className="flex items-center gap-2 mb-3" style={{ color: T.emerald }}>
+        <Sparkles size={14} strokeWidth={1.75} />
+        <span style={{
+          fontSize: 11, fontWeight: 700, letterSpacing: '0.18em',
+          textTransform: 'uppercase'
+        }}>
+          Start here
+        </span>
+      </div>
+      <h3 style={{
+        fontFamily: DISPLAY_FONT, fontWeight: 500,
+        fontSize: 'clamp(20px, 3vw, 28px)',
+        letterSpacing: '-0.01em', color: T.ink, lineHeight: 1.15,
+        marginBottom: 10, marginTop: 0
+      }}>
+        First time? Fill in your inputs below.
+      </h3>
+      <p style={{
+        fontSize: 14, lineHeight: 1.55, color: T.inkSoft,
+        marginBottom: 16, marginTop: 0, maxWidth: 640
+      }}>
+        The numbers above are computed from placeholder values, not your data. Scroll down to the Inputs section and replace them with your real life: age, income, savings, properties, retirement age. The same inputs power all three views.
+      </p>
+      <button
+        onClick={jumpToInputs}
+        type="button"
+        style={{
+          background: T.ink, color: T.surface,
+          padding: '11px 20px', fontWeight: 600,
+          fontSize: 12, letterSpacing: '0.08em', textTransform: 'uppercase',
+          display: 'inline-flex', alignItems: 'center', gap: 8,
+          border: 'none', cursor: 'pointer',
+          fontFamily: BODY_FONT
+        }}
+      >
+        Jump to inputs ↓
+      </button>
     </div>
   );
 }
@@ -3093,6 +3222,13 @@ export default function RetirementReadiness() {
           />
         )}
 
+        {/* "Start here" banner — first-time visitors land on the calculator
+            and see computed defaults, not their own numbers. The banner makes
+            it obvious where to put their data. Dismissible (saves to
+            localStorage), but stays available as a small sticky chip after
+            dismissal so users can still jump to inputs. */}
+        <GetStartedBanner />
+
         {activeView === 'retirement' && (<>
 
         {/* ============= HEADLINE RESULT ============= */}
@@ -3329,7 +3465,10 @@ export default function RetirementReadiness() {
         )}
 
         {/* ============= INPUTS ============= */}
-        <div style={{ borderTop: `1px solid ${T.rule}`, marginTop: 8, paddingTop: 24 }}>
+        {/* id="calculator-inputs" is the anchor target for the GetStartedBanner's
+            "Jump to inputs" button. We use scrollMarginTop to offset for the
+            sticky header so the heading isn't hidden behind it when scrolled to. */}
+        <div id="calculator-inputs" style={{ borderTop: `1px solid ${T.rule}`, marginTop: 8, paddingTop: 24, scrollMarginTop: 80 }}>
           <div className="flex items-baseline justify-between mb-5 flex-wrap gap-2">
             <div>
               <div className="text-[11px] uppercase tracking-[0.18em]" style={{ color: T.muted, fontWeight: 600 }}>
@@ -3346,6 +3485,22 @@ export default function RetirementReadiness() {
               {activeView === 'retirement' && 'All inputs are shared across views. Edits here update Net Worth and Job Loss too.'}
               {activeView === 'runway' && 'Stress test assumptions only affect this view. Other inputs are shared.'}
             </div>
+          </div>
+
+          {/* Input-interaction tip — explicitly tells users that values are
+              click-to-edit. Pairs with the always-visible dashed underline on
+              every value to make the affordance obvious on first glance. */}
+          <div style={{
+            background: T.surfaceWarm, border: `1px solid ${T.ruleLight}`,
+            padding: '8px 12px', marginBottom: 16,
+            display: 'inline-flex', alignItems: 'center', gap: 8,
+            fontSize: 12, color: T.inkSoft, lineHeight: 1.4
+          }}>
+            <span style={{ color: T.emerald, fontWeight: 700 }}>Tip</span>
+            <span style={{ color: T.ruleLight }}>·</span>
+            <span>
+              Drag the sliders, or <span style={{ borderBottom: `1px dashed ${T.muted}`, padding: '0 1px' }}>tap any number</span> to type it directly.
+            </span>
           </div>
         </div>
 

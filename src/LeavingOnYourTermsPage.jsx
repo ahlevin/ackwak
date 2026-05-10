@@ -685,10 +685,10 @@ function CrossReferences() {
             to="/just-laid-off"
           />
           <CrossRefCard
-            label="Coming soon"
-            title="Transitions hub"
-            body="A single starting point that routes you to the guide that fits your situation. Coming as the next set of pages comes online."
-            disabled
+            label="Hub"
+            title="Transitions"
+            body="The starting point for all transitions guides on the site. If your situation doesn't quite fit a layoff or a voluntary departure, the hub helps you find the right page."
+            to="/transitions"
           />
         </div>
       </div>

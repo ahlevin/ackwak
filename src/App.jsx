@@ -5,11 +5,12 @@ import {
   TrendingUp, Home, GraduationCap, Briefcase, Heart, Gift, Car,
   CreditCard, Scale, Receipt, KeyRound, Wallet, ShieldCheck,
   FolderOpen, Activity, Wind, Lock, Github, Mail, Calculator,
-  Zap, Eye, FileJson, BarChart3, Layers
+  Zap, Eye, FileJson, BarChart3, Layers, Compass
 } from 'lucide-react';
 import RetirementReadiness from './components/RetirementReadiness.jsx';
 import JustLaidOffPage from './JustLaidOffPage.jsx';
 import LeavingOnYourTermsPage from './LeavingOnYourTermsPage.jsx';
+import TransitionsHubPage from './TransitionsHubPage.jsx';
 
 // Theme tokens shared with the calculator
 const T = {
@@ -47,6 +48,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<LandingPage />} />
         <Route path="/calculator" element={<CalculatorView />} />
+        <Route path="/transitions" element={<TransitionsHubPage />} />
         <Route path="/just-laid-off" element={<JustLaidOffPage />} />
         <Route path="/leaving-on-your-terms" element={<LeavingOnYourTermsPage />} />
         {/* Catch-all: anything else goes home. Friendlier than a 404. */}
@@ -132,6 +134,8 @@ function LandingPage() {
       <SocialProof />
       <FeatureOverview />
       <DeepDive />
+      <BrandCallout />
+      <TransitionsSection />
       <Privacy />
       <FAQ />
       <FinalCTA />
@@ -163,8 +167,7 @@ function LandingPage() {
 // pick it up automatically.
 const NAV_LINKS = [
   { label: 'Calculator',    to: '/calculator',           type: 'route' },
-  { label: 'Just laid off?', to: '/just-laid-off',        type: 'route' },
-  { label: 'Leaving by choice?', to: '/leaving-on-your-terms', type: 'route' },
+  { label: 'Transitions',   to: '/transitions',          type: 'route' },
   { label: 'Features',      to: '/#features',            type: 'anchor' },
   { label: 'FAQ',           to: '/#faq',                 type: 'anchor' }
 ];
@@ -174,10 +177,17 @@ export function SiteNav() {
   const { pathname } = useLocation();
   const onCalculator = pathname === '/calculator';
 
-  // Whether a given link should be styled as the "active" one.
+  // Whether a given link should be styled as the "active" one. The /transitions
+  // hub is treated as active for any of its child pages (/just-laid-off,
+  // /leaving-on-your-terms, plus future transitions pages) so the user always
+  // knows which top-level section they're in.
   const isActive = (link) => {
     if (link.type !== 'route') return false;
-    return pathname === link.to;
+    if (pathname === link.to) return true;
+    if (link.to === '/transitions' && (pathname === '/just-laid-off' || pathname === '/leaving-on-your-terms')) {
+      return true;
+    }
+    return false;
   };
 
   // A nav link element — Link for routes, plain <a> for anchors so the
@@ -296,7 +306,7 @@ function Hero() {
             fontSize: 11, fontWeight: 500,
             textTransform: 'uppercase', letterSpacing: '0.2em'
           }}>
-            ackwak.com · retirement, net worth & expenditures
+            ackwak.com · tools for life transitions and planning
           </span>
         </div>
 
@@ -306,15 +316,15 @@ function Hero() {
           lineHeight: 0.95, letterSpacing: '-0.03em', color: T.ink,
           marginBottom: 28, fontVariationSettings: '"opsz" 144'
         }}>
-          The <em style={{ fontStyle: 'italic', fontWeight: 400, color: T.emerald }}>best darn calculator</em><br />
-          on the planet.
+          Tools for <em style={{ fontStyle: 'italic', fontWeight: 400, color: T.emerald }}>life transitions</em><br />
+          and planning.
         </h1>
 
         <p style={{
           fontSize: 'clamp(16px, 2vw, 20px)', lineHeight: 1.5,
           color: T.inkSoft, maxWidth: 720, marginBottom: 36
         }}>
-          Three views of your financial life, one shared truth. Net worth today. When you can retire. How long you'd last if you lost your job. All on one page, with the same inputs feeding all three answers.
+          A free, private wealth calculator and a real-world guide for the moments your life shifts. See your net worth today, when you can retire, and how long your runway lasts. Plus practical content for layoffs, voluntary departures, and other transitions.
         </p>
 
         <div className="flex items-center gap-3 flex-wrap mb-12">
@@ -325,6 +335,15 @@ function Hero() {
             display: 'inline-flex', alignItems: 'center', gap: 8
           }}>
             Launch the calculator <ArrowRight size={15} strokeWidth={2} />
+          </Link>
+          <Link to="/transitions" style={{
+            color: T.ink, padding: '14px 24px',
+            fontWeight: 600, fontSize: 13,
+            letterSpacing: '0.08em', textTransform: 'uppercase',
+            display: 'inline-flex', alignItems: 'center', gap: 8,
+            border: `1px solid ${T.ink}`
+          }}>
+            Read the guides <ArrowRight size={15} strokeWidth={2} />
           </Link>
           <a href="#features" style={{
             color: T.inkSoft, padding: '14px 8px',
@@ -1101,6 +1120,181 @@ function ScenariosMockup() {
 // ============================================================================
 // PRIVACY
 // ============================================================================
+// ============================================================================
+// BRAND CALLOUT
+// ============================================================================
+// A small section that surfaces the meaning of "ackwak" — acknowledge what
+// we all know — so visitors who notice the unusual name learn the thesis
+// behind it. Acts as a thematic bridge from the calculator content above
+// to the transitions guides below.
+function BrandCallout() {
+  return (
+    <section style={{ background: T.bg, borderBottom: `1px solid ${T.rule}` }}>
+      <div className="max-w-4xl mx-auto px-5 sm:px-8" style={{ paddingTop: 64, paddingBottom: 64 }}>
+        <div style={{
+          background: T.surface, border: `1px solid ${T.rule}`,
+          padding: 'clamp(28px, 5vw, 48px)',
+          borderLeft: `4px solid ${T.ink}`
+        }}>
+          <div style={{
+            fontSize: 11, color: T.muted, fontWeight: 600,
+            letterSpacing: '0.18em', textTransform: 'uppercase',
+            marginBottom: 12
+          }}>
+            What's "ackwak"?
+          </div>
+          <p style={{
+            fontFamily: DISPLAY_FONT, fontWeight: 500,
+            fontSize: 'clamp(20px, 2.6vw, 28px)',
+            lineHeight: 1.25, letterSpacing: '-0.01em',
+            color: T.ink, marginBottom: 16, marginTop: 0
+          }}>
+            <em style={{ fontStyle: 'italic', fontWeight: 400, color: T.emerald }}>Acknowledge what we all know.</em>
+          </p>
+          <p style={{
+            fontSize: 'clamp(14px, 1.6vw, 16px)', lineHeight: 1.6,
+            color: T.inkSoft, margin: 0
+          }}>
+            Life happens. Transitions happen. Layoffs, career changes, retirement, leaving jobs by choice or not. Most personal-finance sites politely skip past those moments. We built this for the moments themselves.
+          </p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ============================================================================
+// TRANSITIONS SECTION (homepage)
+// ============================================================================
+// Surfaces the transitions content arm of the site so visitors who land here
+// can see that ackwak.com isn't just calculators. Two cards point at the
+// existing /just-laid-off and /leaving-on-your-terms pages, plus a primary
+// link to the /transitions hub.
+function TransitionsSection() {
+  return (
+    <section id="transitions" style={{ background: T.surfaceWarm, borderBottom: `1px solid ${T.rule}` }}>
+      <div className="max-w-7xl mx-auto px-5 sm:px-8" style={{ paddingTop: 80, paddingBottom: 80 }}>
+        <div className="mb-12">
+          <div className="flex items-center gap-2 mb-4" style={{ color: T.muted }}>
+            <Compass size={13} strokeWidth={1.5} />
+            <span style={{
+              fontSize: 11, fontWeight: 500,
+              textTransform: 'uppercase', letterSpacing: '0.2em'
+            }}>
+              Transitions guides
+            </span>
+          </div>
+          <h2 style={{
+            fontFamily: DISPLAY_FONT, fontWeight: 500,
+            fontSize: 'clamp(32px, 5vw, 56px)',
+            lineHeight: 1.0, letterSpacing: '-0.02em', color: T.ink,
+            marginBottom: 20
+          }}>
+            Practical guides for <em style={{ fontStyle: 'italic', fontWeight: 400, color: T.emerald }}>real moments</em>.
+          </h2>
+          <p style={{
+            fontSize: 'clamp(15px, 1.8vw, 18px)', lineHeight: 1.55,
+            color: T.inkSoft, maxWidth: 720
+          }}>
+            Beyond the calculator, growing library of practical content for the moments that matter. Layoffs, voluntary departures, and the financial decisions that come with each. Sequenced advice, state-specific data, no fluff.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+          <TransitionCard
+            to="/just-laid-off"
+            accent={T.oxblood}
+            label="It happened to me"
+            title="Just laid off"
+            body="The first week after a layoff, in order. Severance, unemployment, COBRA, the immediate financial scaffolding. State-specific data for the top 15 states."
+          />
+          <TransitionCard
+            to="/leaving-on-your-terms"
+            accent={T.emerald}
+            label="It was my call"
+            title="Leaving on your terms"
+            body="Quitting for a new job, starting your own thing, retiring early, or just done. Four-phase timeline from months out through the first weeks free."
+          />
+        </div>
+
+        <div style={{
+          background: T.surface, border: `1px solid ${T.rule}`,
+          padding: 'clamp(16px, 2.5vw, 24px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          gap: 16, flexWrap: 'wrap'
+        }}>
+          <div style={{ flex: 1, minWidth: 240 }}>
+            <div style={{ fontSize: 11, color: T.muted, fontWeight: 600, letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: 4 }}>
+              Not sure where to start?
+            </div>
+            <p style={{ fontSize: 14, lineHeight: 1.5, color: T.ink, margin: 0 }}>
+              The hub at /transitions disambiguates and routes you to the right guide based on your situation.
+            </p>
+          </div>
+          <Link to="/transitions" style={{
+            background: T.ink, color: T.surface,
+            padding: '12px 20px', fontWeight: 600,
+            fontSize: 12, letterSpacing: '0.08em', textTransform: 'uppercase',
+            display: 'inline-flex', alignItems: 'center', gap: 8,
+            textDecoration: 'none'
+          }}>
+            Open the hub <ArrowRight size={14} strokeWidth={2} />
+          </Link>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function TransitionCard({ to, accent, label, title, body }) {
+  return (
+    <Link to={to} style={{ textDecoration: 'none', color: 'inherit' }}>
+      <div
+        style={{
+          background: T.surface, border: `1px solid ${T.rule}`,
+          borderTop: `4px solid ${accent}`,
+          padding: 'clamp(20px, 3vw, 32px)',
+          height: '100%',
+          display: 'flex', flexDirection: 'column',
+          transition: 'transform 120ms ease, box-shadow 120ms ease',
+          cursor: 'pointer'
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.transform = 'translateY(-2px)';
+          e.currentTarget.style.boxShadow = `0 8px 24px ${accent}15`;
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.transform = 'translateY(0)';
+          e.currentTarget.style.boxShadow = 'none';
+        }}
+      >
+        <div style={{
+          fontSize: 11, color: accent, fontWeight: 700,
+          letterSpacing: '0.18em', textTransform: 'uppercase', marginBottom: 12
+        }}>
+          {label}
+        </div>
+        <h3 style={{
+          fontFamily: DISPLAY_FONT, fontWeight: 500,
+          fontSize: 'clamp(22px, 3vw, 30px)',
+          letterSpacing: '-0.01em', color: T.ink, lineHeight: 1.1,
+          marginBottom: 12
+        }}>
+          {title}
+        </h3>
+        <p style={{
+          fontSize: 14, lineHeight: 1.55, color: T.inkSoft, margin: 0, marginBottom: 16
+        }}>
+          {body}
+        </p>
+        <div style={{ marginTop: 'auto', display: 'flex', alignItems: 'center', gap: 6, color: accent, fontWeight: 600, fontSize: 13 }}>
+          Read this guide <ArrowRight size={14} strokeWidth={2} />
+        </div>
+      </div>
+    </Link>
+  );
+}
+
 function Privacy() {
   return (
     <section id="privacy" style={{ borderBottom: `1px solid ${T.rule}` }}>
@@ -1155,7 +1349,7 @@ function FAQ() {
   const faqs = [
     {
       q: "What's with the name?",
-      a: "The calculator's the thing. The name is just a domain that was available. Don't overthink it."
+      a: "ackwak stands for acknowledge what we all know. Life happens. Transitions happen. Layoffs, career changes, retirement, leaving jobs by choice or not. Most personal-finance sites politely skip past those moments. We built ackwak for the moments themselves."
     },
     {
       q: "Is this really free?",

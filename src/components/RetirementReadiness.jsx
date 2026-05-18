@@ -5262,6 +5262,160 @@ function AutoStat({ label, value, tone, help }) {
   );
 }
 
+// ============================================================================
+// AGE CONTROL
+// ============================================================================
+// The centerpiece of the Net Worth Inspector. Lets the user pick which age
+// they want to project net worth to. Three layers of affordance:
+//
+//   1. Click-to-edit big age number with [-] and [+] buttons on each side
+//      for single-year precision. Works on touch devices where slider drags
+//      are imprecise; works for keyboard users; works for desktop click.
+//
+//   2. Slider underneath for fast scrubbing across the age range. Native
+//      <input type="range"> for keyboard arrow accessibility.
+//
+//   3. Shortcut buttons (rendered by the parent) below for jumping to
+//      extremes (Now / End of life) and resetting.
+//
+// The big age display sits prominently centered. When at min/max, the
+// corresponding +/- button dims to indicate the bound.
+function AgeControl({ age, minAge, maxAge, onChange, isCurrent }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(String(age));
+
+  const atMin = age <= minAge;
+  const atMax = age >= maxAge;
+
+  const dec = () => { if (!atMin) onChange(age - 1); };
+  const inc = () => { if (!atMax) onChange(age + 1); };
+
+  const startEdit = () => {
+    setDraft(String(age));
+    setEditing(true);
+  };
+  const commit = () => {
+    const n = parseInt(draft, 10);
+    if (!isNaN(n)) {
+      const clamped = Math.max(minAge, Math.min(maxAge, n));
+      onChange(clamped);
+    }
+    setEditing(false);
+  };
+  const cancel = () => { setEditing(false); };
+
+  const btnBase = {
+    fontFamily: BODY_FONT, fontWeight: 600, fontSize: 22,
+    width: 44, height: 44, lineHeight: 1,
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    background: T.surface, border: `1px solid ${T.rule}`,
+    cursor: 'pointer', transition: 'all 120ms ease',
+    userSelect: 'none', flexShrink: 0
+  };
+  const disabledStyle = { opacity: 0.3, cursor: 'not-allowed', pointerEvents: 'none' };
+
+  return (
+    <div className="mb-4">
+      {/* Big age + buttons row */}
+      <div className="flex items-center justify-center gap-3 sm:gap-5 mb-3">
+        <button
+          onClick={dec}
+          type="button"
+          aria-label="Decrease age by 1"
+          style={{ ...btnBase, ...(atMin ? disabledStyle : {}), color: T.ink }}
+          onMouseEnter={(e) => { if (!atMin) { e.currentTarget.style.background = T.ink; e.currentTarget.style.color = T.surface; }}}
+          onMouseLeave={(e) => { if (!atMin) { e.currentTarget.style.background = T.surface; e.currentTarget.style.color = T.ink; }}}
+        >
+          −
+        </button>
+
+        <div className="flex flex-col items-center" style={{ minWidth: 140 }}>
+          <div className="text-[10px] uppercase tracking-[0.18em] mb-1" style={{ color: T.muted, fontWeight: 600 }}>
+            {isCurrent ? 'Current age' : 'Inspecting age'}
+          </div>
+          {editing ? (
+            <input
+              type="number"
+              autoFocus
+              value={draft}
+              min={minAge}
+              max={maxAge}
+              onChange={(e) => setDraft(e.target.value)}
+              onBlur={commit}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') commit();
+                else if (e.key === 'Escape') cancel();
+              }}
+              style={{
+                fontFamily: DISPLAY_FONT, fontWeight: 500,
+                fontSize: 'clamp(32px, 7vw, 48px)',
+                color: T.ink, letterSpacing: '-0.02em',
+                textAlign: 'center', width: 110,
+                background: 'transparent',
+                border: 'none',
+                borderBottom: `2px solid ${T.ink}`,
+                outline: 'none', padding: 0,
+                fontVariantNumeric: 'tabular-nums'
+              }}
+            />
+          ) : (
+            <button
+              onClick={startEdit}
+              type="button"
+              title="Click or tap to type an age"
+              style={{
+                fontFamily: DISPLAY_FONT, fontWeight: 500,
+                fontSize: 'clamp(32px, 7vw, 48px)',
+                color: T.ink, letterSpacing: '-0.02em',
+                background: 'transparent', border: 'none',
+                borderBottom: `1px dashed ${T.muted}`,
+                padding: '0 6px', cursor: 'text',
+                fontVariantNumeric: 'tabular-nums',
+                lineHeight: 1.05,
+                transition: 'border-color 120ms ease'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.borderBottomColor = T.ink}
+              onMouseLeave={(e) => e.currentTarget.style.borderBottomColor = T.muted}
+            >
+              {age}
+            </button>
+          )}
+        </div>
+
+        <button
+          onClick={inc}
+          type="button"
+          aria-label="Increase age by 1"
+          style={{ ...btnBase, ...(atMax ? disabledStyle : {}), color: T.ink }}
+          onMouseEnter={(e) => { if (!atMax) { e.currentTarget.style.background = T.ink; e.currentTarget.style.color = T.surface; }}}
+          onMouseLeave={(e) => { if (!atMax) { e.currentTarget.style.background = T.surface; e.currentTarget.style.color = T.ink; }}}
+        >
+          +
+        </button>
+      </div>
+
+      {/* Slider for fast scrubbing */}
+      <div className="px-2">
+        <div className="flex items-baseline justify-between mb-1 text-[10px] uppercase tracking-[0.12em]" style={{ color: T.muted, fontWeight: 500 }}>
+          <span>Age {minAge}</span>
+          <span>Age {maxAge}</span>
+        </div>
+        <input
+          type="range"
+          min={minAge}
+          max={maxAge}
+          step={1}
+          value={age}
+          onChange={(e) => onChange(parseInt(e.target.value, 10))}
+          className="w-full"
+          aria-label="Inspect age"
+          style={{ accentColor: T.ink }}
+        />
+      </div>
+    </div>
+  );
+}
+
 function NetWorthInspector({ snapshot, snapshotNoInh, inheritanceReceived, inspectorAge, minAge, maxAge, onAgeChange, isCurrent, scenario, onScenarioChange, onAuditYear }) {
   if (!snapshot) return null;
 
@@ -5351,28 +5505,26 @@ function NetWorthInspector({ snapshot, snapshotNoInh, inheritanceReceived, inspe
       </div>
 
       <p className="text-[12px] mb-5" style={{ color: T.muted, fontStyle: 'italic' }}>
-        Drag the slider to inspect any age. {isCurrent ? 'Showing today, values exactly as entered, before any simulation runs. Scenario choice does not affect today\'s view.' : `Showing the ${meta.label.toLowerCase()} scenario, values reflect projected balances after growth, depreciation, and debt paydown.`}
+        Use the controls below to inspect any age. {isCurrent ? 'Showing today, values exactly as entered, before any simulation runs. Scenario choice does not affect today\'s view.' : `Showing the ${meta.label.toLowerCase()} scenario, values reflect projected balances after growth, depreciation, and debt paydown.`}
       </p>
 
-      {/* Age slider */}
+      {/* Age control — the centerpiece of the inspector. Three layers of
+          affordance for picking an age:
+            1. Big click-to-edit number with [-] and [+] buttons for single-
+               year precision (works on touch where slider drags don't)
+            2. Slider below for fast scrubbing across many years
+            3. Shortcut buttons at the bottom for jumping to extremes
+          The age display itself becomes the primary visual element — bigger
+          than the verdict numbers below so users see it as a control. */}
+      <AgeControl
+        age={inspectorAge}
+        minAge={minAge}
+        maxAge={maxAge}
+        onChange={onAgeChange}
+        isCurrent={isCurrent}
+      />
+
       <div className="mb-6">
-        <div className="flex items-baseline justify-between mb-2 text-[10px] uppercase tracking-[0.12em]" style={{ color: T.muted, fontWeight: 500 }}>
-          <span>Age {minAge}</span>
-          <span style={{ color: T.ink, fontFamily: DISPLAY_FONT, fontSize: 16, fontWeight: 500, textTransform: 'none', letterSpacing: '-0.01em' }}>
-            Inspecting age {inspectorAge}
-          </span>
-          <span>Age {maxAge}</span>
-        </div>
-        <input
-          type="range"
-          min={minAge}
-          max={maxAge}
-          step={1}
-          value={inspectorAge}
-          onChange={(e) => onAgeChange(parseInt(e.target.value, 10))}
-          className="w-full"
-          style={{ accentColor: T.ink }}
-        />
         <div className="flex items-center justify-between mt-1.5">
           <button
             onClick={() => onAgeChange(minAge)}
@@ -5396,18 +5548,21 @@ function NetWorthInspector({ snapshot, snapshotNoInh, inheritanceReceived, inspe
             End of life →
           </button>
         </div>
-        {!isCurrent && onAuditYear && (
+        {onAuditYear && (
           <button
             onClick={onAuditYear}
-            className="mt-3 w-full py-2 flex items-center justify-center gap-2 transition-opacity hover:opacity-80"
+            className="mt-3 w-full py-2.5 flex items-center justify-center gap-2 transition-opacity hover:opacity-80"
             style={{
               background: T.ink, color: T.surface,
               fontFamily: BODY_FONT, fontWeight: 600,
-              fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase'
+              fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase',
+              border: 'none', cursor: 'pointer'
             }}
           >
             <Receipt size={12} strokeWidth={1.5} />
-            Audit income & expenses for age {inspectorAge}
+            {isCurrent
+              ? "Audit this year's income & expenses"
+              : `Audit income & expenses for age ${inspectorAge}`}
           </button>
         )}
       </div>

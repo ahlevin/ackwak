@@ -1396,7 +1396,7 @@ function NumInput({ label, value, onChange, prefix = '$', step = 1000 }) {
 // ============================================================================
 // Pure snapshot of "today". No projections, no scenario toggles. The foundation
 // view: where you stand right now, broken down clearly.
-function NetWorthView({ inp, sims }) {
+function NetWorthView({ inp, sims, setActiveView }) {
   // Use the year-0 snapshot (the "today" entry that comes before year 0 in trajectory)
   const today = sims.mod.trajectory.find(t => t.isSnapshot) || sims.mod.trajectory[0];
 
@@ -1446,10 +1446,13 @@ function NetWorthView({ inp, sims }) {
 
   return (
     <>
-      {/* Headline net worth */}
-      <div className="grid grid-cols-12 gap-6 mb-8">
+      {/* Headline net worth — full-width to give the answer the prominence
+          it deserves. This is the answer to "what does this calculator tell
+          me," so it gets the whole row. The Position Health Check below it
+          (also full-width now) gives the supporting context. */}
+      <div className="grid grid-cols-12 gap-6 mb-6">
         {/* Verdict card */}
-        <div className="col-span-12 lg:col-span-7 p-5 sm:p-8" style={{
+        <div className="col-span-12 p-5 sm:p-8" style={{
           background: T.surface, border: `1px solid ${T.rule}`,
           position: 'relative', overflow: 'hidden'
         }}>
@@ -1505,8 +1508,10 @@ function NetWorthView({ inp, sims }) {
           </div>
         </div>
 
-        {/* Health card */}
-        <div className="col-span-12 lg:col-span-5 p-5 sm:p-8" style={{ background: T.ink, color: T.surface }}>
+        {/* Health card — full-width supporting context for the headline.
+            The four health metrics flow side-by-side on wide screens,
+            stack on mobile. */}
+        <div className="col-span-12 p-5 sm:p-8" style={{ background: T.ink, color: T.surface }}>
           <div className="flex items-center gap-2 mb-4" style={{ color: '#A8C9B5' }}>
             <Activity size={13} strokeWidth={1.5} />
             <span className="text-[11px] uppercase tracking-[0.2em]" style={{ fontWeight: 600 }}>
@@ -1516,27 +1521,33 @@ function NetWorthView({ inp, sims }) {
           <p className="text-[14px] mb-5" style={{ color: '#C9C4BB', lineHeight: 1.55 }}>
             Quick read of leverage, liquidity, and concentration.
           </p>
-          <HealthRow
-            label="Debt-to-asset ratio"
-            value={fmtPct(ratio)}
-            sub={debtRatioStatus.label}
-            highlight
-          />
-          <HealthRow
-            label="Liquid share of assets"
-            value={fmtPct(liquidShare)}
-            sub={liquidShare < 0.10 ? 'Mostly illiquid' : liquidShare < 0.30 ? 'Reasonable mix' : 'Heavy liquid position'}
-          />
-          <HealthRow
-            label="Real estate concentration"
-            value={totalAssets > 0 ? fmtPct(totalProperty / totalAssets) : ','}
-            sub={totalProperty / totalAssets > 0.50 ? 'Concentrated in property' : 'Diversified'}
-          />
-          <HealthRow
-            label="Retirement-tax-advantaged"
-            value={totalAssets > 0 ? fmtPct((today.k401 + total529) / totalAssets) : ','}
-            sub="401(k) + 529, percent of assets"
-          />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+            <HealthRow
+              label="Debt-to-asset ratio"
+              value={fmtPct(ratio)}
+              sub={debtRatioStatus.label}
+              highlight
+              noBorder
+            />
+            <HealthRow
+              label="Liquid share of assets"
+              value={fmtPct(liquidShare)}
+              sub={liquidShare < 0.10 ? 'Mostly illiquid' : liquidShare < 0.30 ? 'Reasonable mix' : 'Heavy liquid position'}
+              noBorder
+            />
+            <HealthRow
+              label="Real estate concentration"
+              value={totalAssets > 0 ? fmtPct(totalProperty / totalAssets) : ','}
+              sub={totalProperty / totalAssets > 0.50 ? 'Concentrated in property' : 'Diversified'}
+              noBorder
+            />
+            <HealthRow
+              label="Retirement-tax-advantaged"
+              value={totalAssets > 0 ? fmtPct((today.k401 + total529) / totalAssets) : ','}
+              sub="401(k) + 529, percent of assets"
+              noBorder
+            />
+          </div>
         </div>
       </div>
 
@@ -1672,12 +1683,19 @@ function NetWorthView({ inp, sims }) {
           Liabilities bar is scaled to the same axis as assets, width visually represents debt as a fraction of total assets ({fmtPct(ratio)}).
         </p>
       </div>
+
+      {/* Now that the user has seen their full Net Worth picture, point them
+          to the two other views that use the same inputs. Lives at the
+          bottom of the page, after Composition at a Glance, as a natural
+          "what next" beat. */}
+      <WhatThisPowers onSwitchView={setActiveView} />
     </>
   );
 }
 
-// Rendered after inputs panel on Net Worth tab. Acts as a transition from
-// "you've seen and edited your current state" to "here's what we do with it."
+// Rendered at the bottom of the Net Worth view. Acts as a "what next" beat:
+// now that the user has seen and edited their current state, this points
+// them to the two other views that use the same inputs.
 function WhatThisPowers({ onSwitchView }) {
   const cardStyle = {
     background: T.surface, border: `1px solid ${T.rule}`,
@@ -1737,10 +1755,10 @@ function WhatThisPowers({ onSwitchView }) {
   );
 }
 
-function HealthRow({ label, value, sub, highlight }) {
+function HealthRow({ label, value, sub, highlight, noBorder }) {
   return (
     <div className="flex items-center justify-between py-2.5" style={{
-      borderBottom: highlight ? 'none' : '1px solid rgba(255,255,255,0.08)'
+      borderBottom: (highlight || noBorder) ? 'none' : '1px solid rgba(255,255,255,0.08)'
     }}>
       <div className="min-w-0">
         <div className="text-[11px] sm:text-[12px]" style={{ color: highlight ? '#9DD9B5' : '#C9C4BB', fontWeight: 500 }}>
@@ -1785,9 +1803,10 @@ function RunwayView({ inp, setInp, set, runways, auditMonth, setAuditMonth, runw
   return (
     <>
       {/* Headline runway result */}
-      <div className="grid grid-cols-12 gap-6 mb-8">
+      {/* Same full-width verdict pattern as the other tabs. */}
+      <div className="grid grid-cols-12 gap-6 mb-6">
         {/* Verdict card */}
-        <div className="col-span-12 lg:col-span-7 p-5 sm:p-8" style={{
+        <div className="col-span-12 p-5 sm:p-8" style={{
           background: T.surface, border: `1px solid ${T.rule}`,
           position: 'relative', overflow: 'hidden'
         }}>
@@ -1840,8 +1859,8 @@ function RunwayView({ inp, setInp, set, runways, auditMonth, setAuditMonth, runw
           </div>
         </div>
 
-        {/* 3-scenario comparison */}
-        <div className="col-span-12 lg:col-span-5 p-5 sm:p-8" style={{ background: T.ink, color: T.surface }}>
+        {/* 3-scenario comparison — full-width supporting context */}
+        <div className="col-span-12 p-5 sm:p-8" style={{ background: T.ink, color: T.surface }}>
           <div className="flex items-center gap-2 mb-4" style={{ color: '#A8C9B5' }}>
             <Activity size={13} strokeWidth={1.5} />
             <span className="text-[11px] uppercase tracking-[0.2em]" style={{ fontWeight: 600 }}>
@@ -1851,28 +1870,34 @@ function RunwayView({ inp, setInp, set, runways, auditMonth, setAuditMonth, runw
           <p className="text-[13px] mb-4" style={{ color: '#C9C4BB', lineHeight: 1.55 }}>
             Click a scenario to make it active above.
           </p>
-          <RunwayScenarioRow
-            label="Bare bones"
-            sub="Just your liquid savings, no benefits"
-            sim={runways.bare}
-            active={scenario === 'bare'}
-            onClick={() => setScenario('bare')}
-          />
-          <RunwayScenarioRow
-            label="Realistic"
-            sub="Severance + UI + 15% expense cut"
-            sim={runways.typical}
-            active={scenario === 'typical'}
-            onClick={() => setScenario('typical')}
-            highlight
-          />
-          <RunwayScenarioRow
-            label="Best case"
-            sub="All of realistic + 25% expense cut"
-            sim={runways.best}
-            active={scenario === 'best'}
-            onClick={() => setScenario('best')}
-          />
+          {/* Three scenarios side-by-side on wide screens, stacked on mobile */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-5">
+            <RunwayScenarioRow
+              label="Bare bones"
+              sub="Just your liquid savings, no benefits"
+              sim={runways.bare}
+              active={scenario === 'bare'}
+              onClick={() => setScenario('bare')}
+              noBorder
+            />
+            <RunwayScenarioRow
+              label="Realistic"
+              sub="Severance + UI + 15% expense cut"
+              sim={runways.typical}
+              active={scenario === 'typical'}
+              onClick={() => setScenario('typical')}
+              highlight
+              noBorder
+            />
+            <RunwayScenarioRow
+              label="Best case"
+              sub="All of realistic + 25% expense cut"
+              sim={runways.best}
+              active={scenario === 'best'}
+              onClick={() => setScenario('best')}
+              noBorder
+            />
+          </div>
         </div>
       </div>
 
@@ -1947,7 +1972,7 @@ function RunwayView({ inp, setInp, set, runways, auditMonth, setAuditMonth, runw
   );
 }
 
-function RunwayScenarioRow({ label, sub, sim, active, onClick, highlight }) {
+function RunwayScenarioRow({ label, sub, sim, active, onClick, highlight, noBorder }) {
   const lasted = sim.survivesAtCap ? '60+ mo' : sim.monthsLasted === 0 ? '<1 mo' : `${sim.monthsLasted} mo`;
   const tone = sim.survivesAtCap || sim.monthsLasted >= 12 ? '#9DD9B5' : sim.monthsLasted >= 6 ? '#F2C97A' : '#F2A4A4';
   return (
@@ -1955,7 +1980,7 @@ function RunwayScenarioRow({ label, sub, sim, active, onClick, highlight }) {
       onClick={onClick}
       className="w-full flex items-center justify-between py-2.5 transition-opacity hover:opacity-90"
       style={{
-        borderBottom: highlight ? 'none' : '1px solid rgba(255,255,255,0.08)',
+        borderBottom: (highlight || noBorder) ? 'none' : '1px solid rgba(255,255,255,0.08)',
         background: active ? 'rgba(255,255,255,0.06)' : 'transparent',
         margin: active ? '0 -8px' : '0',
         padding: active ? '10px 8px' : '10px 0',
@@ -2065,114 +2090,37 @@ function RunwayTooltip({ active, payload, label }) {
 }
 
 // ============================================================================
-// GET STARTED BANNER
+// SEE RESULTS BUTTON
 // ============================================================================
-// First-time users land on the calculator and see computed values from default
-// inputs (a placeholder 45-year-old married couple making $175K). This is
-// confusing because there's no signpost saying "your inputs go here."
-//
-// The banner solves that. It sits above all tab outputs and says clearly:
-//   - These are placeholder values
-//   - Your inputs go below
-//   - Jump to inputs button scrolls smoothly to #calculator-inputs
-//
-// Dismissible (saves to localStorage). After dismissal, the user sees a
-// small persistent chip that still lets them jump to inputs, so they're
-// never "stranded" at the top of the page with no clear next step.
-function GetStartedBanner() {
-  const STORAGE_KEY = 'ackwak.calculator.bannerDismissed';
-  const [dismissed, setDismissed] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    try { return window.localStorage.getItem(STORAGE_KEY) === 'true'; }
-    catch (e) { return false; }
-  });
-
-  const dismiss = () => {
-    setDismissed(true);
-    try { window.localStorage.setItem(STORAGE_KEY, 'true'); }
-    catch (e) { /* localStorage might be disabled, no big deal */ }
-  };
-
-  const jumpToInputs = (e) => {
+// With inputs now above outputs, users edit what they need at the top of
+// the page, then want to scroll down to see the recomputed numbers. This
+// button gives them a clear next step. Smooth-scrolls to #calculator-results
+// at the start of the output content for the active tab.
+function SeeResultsButton() {
+  const jumpToResults = (e) => {
     e.preventDefault();
-    const el = document.getElementById('calculator-inputs');
+    const el = document.getElementById('calculator-results');
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
-  // Dismissed state: a small chip in the corner with just "Jump to inputs"
-  // so returning users still have an easy path to edit their data but the
-  // wall-of-text banner doesn't keep appearing.
-  if (dismissed) {
-    return (
-      <div style={{ marginBottom: 20 }}>
-        <button
-          onClick={jumpToInputs}
-          type="button"
-          style={{
-            background: T.surface, border: `1px solid ${T.rule}`,
-            padding: '8px 14px',
-            fontFamily: BODY_FONT, fontSize: 12, fontWeight: 600,
-            color: T.inkSoft, letterSpacing: '0.05em', textTransform: 'uppercase',
-            cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6,
-            transition: 'background 120ms, border-color 120ms'
-          }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = T.surfaceWarm; e.currentTarget.style.borderColor = T.ink; }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = T.surface; e.currentTarget.style.borderColor = T.rule; }}
-          aria-label="Jump to inputs"
-        >
-          ↓ Jump to inputs
-        </button>
-      </div>
-    );
-  }
-
-  // First visit (or never dismissed): full banner with explanation and CTA.
   return (
     <div style={{
-      background: T.surface,
-      border: `1px solid ${T.rule}`,
-      borderLeft: `4px solid ${T.emerald}`,
-      padding: 'clamp(16px, 3vw, 24px)',
-      marginBottom: 24,
-      position: 'relative'
+      marginTop: 24,
+      paddingTop: 20,
+      borderTop: `1px solid ${T.ruleLight}`,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 16,
+      flexWrap: 'wrap'
     }}>
-      <button
-        onClick={dismiss}
-        type="button"
-        aria-label="Dismiss this banner"
-        style={{
-          position: 'absolute', top: 10, right: 10,
-          background: 'transparent', border: 'none', cursor: 'pointer',
-          color: T.muted, padding: 6, lineHeight: 1
-        }}
-      >
-        <X size={16} strokeWidth={2} />
-      </button>
-      <div className="flex items-center gap-2 mb-3" style={{ color: T.emerald }}>
-        <Sparkles size={14} strokeWidth={1.75} />
-        <span style={{
-          fontSize: 11, fontWeight: 700, letterSpacing: '0.18em',
-          textTransform: 'uppercase'
-        }}>
-          Start here
-        </span>
-      </div>
-      <h3 style={{
-        fontFamily: DISPLAY_FONT, fontWeight: 500,
-        fontSize: 'clamp(20px, 3vw, 28px)',
-        letterSpacing: '-0.01em', color: T.ink, lineHeight: 1.15,
-        marginBottom: 10, marginTop: 0
+      <span style={{
+        fontSize: 12, color: T.muted, fontStyle: 'italic'
       }}>
-        Fill in your inputs below.
-      </h3>
-      <p style={{
-        fontSize: 14, lineHeight: 1.55, color: T.inkSoft,
-        marginBottom: 16, marginTop: 0, maxWidth: 640
-      }}>
-        Jump to the Inputs section and make whatever updates you want to model for your situation. The same inputs power all three views.
-      </p>
+        Edits update results automatically.
+      </span>
       <button
-        onClick={jumpToInputs}
+        onClick={jumpToResults}
         type="button"
         style={{
           background: T.ink, color: T.surface,
@@ -2183,7 +2131,7 @@ function GetStartedBanner() {
           fontFamily: BODY_FONT
         }}
       >
-        Jump to inputs ↓
+        See results <span style={{ fontSize: 14 }}>↓</span>
       </button>
     </div>
   );
@@ -3222,253 +3170,12 @@ export default function RetirementReadiness() {
           />
         )}
 
-        {/* "Start here" banner — first-time visitors land on the calculator
-            and see computed defaults, not their own numbers. The banner makes
-            it obvious where to put their data. Dismissible (saves to
-            localStorage), but stays available as a small sticky chip after
-            dismissal so users can still jump to inputs. */}
-        <GetStartedBanner />
-
-        {activeView === 'retirement' && (<>
-
-        {/* ============= HEADLINE RESULT ============= */}
-        <div className="grid grid-cols-12 gap-6 mb-10">
-          {/* Verdict card */}
-          <div className="col-span-12 lg:col-span-7 p-5 sm:p-8" style={{
-            background: T.surface, border: `1px solid ${T.rule}`,
-            position: 'relative', overflow: 'hidden'
-          }}>
-            <div style={{
-              position: 'absolute', top: 0, right: 0, width: 240, height: 240,
-              background: `radial-gradient(circle at top right, ${risk.soft}, transparent 70%)`,
-              opacity: 0.6, pointerEvents: 'none'
-            }} />
-
-            <div className="relative">
-              <div className="flex items-center gap-2 mb-4">
-                <risk.icon size={14} style={{ color: risk.color }} strokeWidth={1.5} />
-                <span className="text-[11px] uppercase tracking-[0.2em]" style={{ color: risk.color, fontWeight: 600 }}>
-                  {risk.label} at age {inp.retirementAge}
-                </span>
-              </div>
-
-              <p style={{
-                fontFamily: DISPLAY_FONT, fontWeight: 400,
-                fontSize: 'clamp(22px, 2.6vw, 32px)',
-                lineHeight: 1.2, letterSpacing: '-0.01em',
-                color: T.ink, marginBottom: 24
-              }}>
-                {sims.mod.runOutAge === null ? (
-                  <>If you retire at <strong style={{ fontWeight: 600 }}>{inp.retirementAge}</strong>, your portfolio is projected to last through age <strong style={{ fontWeight: 600 }}>{inp.lifeExpectancy}</strong> under moderate assumptions.</>
-                ) : (
-                  <>If you retire at <strong style={{ fontWeight: 600 }}>{inp.retirementAge}</strong>, your liquid savings run out at age <strong style={{ fontWeight: 600, color: risk.color }}>{sims.mod.runOutAge}</strong>, <em style={{ fontStyle: 'italic' }}>{sims.mod.runOutAge - inp.retirementAge} years into retirement</em>.</>
-                )}
-              </p>
-
-              <div className="grid grid-cols-3 gap-3 sm:gap-6 pt-4 sm:pt-6" style={{ borderTop: `1px solid ${T.ruleLight}` }}>
-                <div className="min-w-0">
-                  <div className="text-[10px] uppercase tracking-[0.12em] mb-1" style={{ color: T.muted, fontWeight: 500 }}>Portfolio at retirement</div>
-                  <div style={{ fontFamily: DISPLAY_FONT, fontWeight: 500, fontSize: 'clamp(16px, 4vw, 26px)', color: T.ink, fontVariantNumeric: 'tabular-nums', wordBreak: 'break-word' }}>
-                    {fmt$Full(sims.mod.portfolioAtRetirement)}
-                  </div>
-                </div>
-                <div className="min-w-0">
-                  <div className="text-[10px] uppercase tracking-[0.12em] mb-1" style={{ color: T.muted, fontWeight: 500 }}>Net worth at retirement</div>
-                  <div style={{ fontFamily: DISPLAY_FONT, fontWeight: 500, fontSize: 'clamp(16px, 4vw, 26px)', color: T.ink, fontVariantNumeric: 'tabular-nums', wordBreak: 'break-word' }}>
-                    {fmt$Full(sims.mod.netWorthAtRetirement)}
-                  </div>
-                </div>
-                <div className="min-w-0">
-                  <div className="text-[10px] uppercase tracking-[0.12em] mb-1" style={{ color: T.muted, fontWeight: 500 }}>Years to retirement</div>
-                  <div style={{ fontFamily: DISPLAY_FONT, fontWeight: 500, fontSize: 'clamp(16px, 4vw, 26px)', color: T.ink, fontVariantNumeric: 'tabular-nums' }}>
-                    {Math.max(0, inp.retirementAge - inp.currentAge)}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Recommendation card */}
-          <div className="col-span-12 lg:col-span-5 p-5 sm:p-8" style={{
-            background: T.ink, color: T.surface
-          }}>
-            <div className="flex items-center gap-2 mb-4" style={{ color: '#A8C9B5' }}>
-              <Wind size={14} strokeWidth={1.5} />
-              <span className="text-[11px] uppercase tracking-[0.2em]" style={{ fontWeight: 600 }}>
-                Our recommendation
-              </span>
-            </div>
-
-            <p style={{
-              fontFamily: DISPLAY_FONT, fontWeight: 400,
-              fontSize: 22, lineHeight: 1.3, marginBottom: 24
-            }}>
-              {safeAge !== null ? (
-                <>To retire with <strong style={{ fontWeight: 600, color: '#9DD9B5' }}>low risk</strong> of running out of money, target retirement at age <strong style={{ fontWeight: 600 }}>{safeAge}</strong>.</>
-              ) : (
-                <>Even working until 75, the conservative scenario doesn't survive, consider increasing savings, reducing expenses, or both.</>
-              )}
-            </p>
-
-            <div className="space-y-3">
-              <RecRow label="Aggressive (high risk)" age={moderateAge && moderateAge < (safeAge || 999) ? moderateAge : ','} hint="Money lasts under moderate assumptions" />
-              <RecRow label="Balanced (moderate risk)" age={moderateAge !== null ? moderateAge : ','} hint="Comfortable margin in normal markets" />
-              <RecRow label="Conservative (low risk)" age={safeAge !== null ? safeAge : ','} hint="Survives bad markets & longer life" highlight />
-            </div>
-          </div>
-        </div>
-
-        {/* ============= NET WORTH INSPECTOR ============= */}
-        <NetWorthInspector
-          snapshot={nwSnapshot}
-          snapshotNoInh={nwSnapshotNoInh}
-          inheritanceReceived={inheritanceReceivedToDate}
-          inspectorAge={effectiveInspectorAge}
-          minAge={inp.currentAge}
-          maxAge={inp.lifeExpectancy}
-          onAgeChange={setInspectorAge}
-          isCurrent={effectiveInspectorAge === inp.currentAge}
-          scenario={inspectorScenario}
-          onScenarioChange={setInspectorScenario}
-          onAuditYear={() => { setAuditAge(effectiveInspectorAge); setAuditScenario(inspectorScenario); }}
-        />
-
-        {/* ============= SCENARIO TRIPTYCH ============= */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-          <ScenarioCard scenario="cons" sim={sims.cons} label="Conservative" subtitle="Returns −2pts · expenses +12% · life +3 yrs" inp={inp} />
-          <ScenarioCard scenario="mod" sim={sims.mod} label="Moderate" subtitle="Your inputs as-is" inp={inp} />
-          <ScenarioCard scenario="opt" sim={sims.opt} label="Optimistic" subtitle="Returns +1.5pts · expenses −8% · life −2 yrs" inp={inp} />
-        </div>
-
-        {/* ============= CHART ============= */}
-        <div className="mb-10 p-4 sm:p-6" style={{ background: T.surface, border: `1px solid ${T.rule}` }}>
-          <div className="flex items-baseline justify-between mb-2 flex-wrap gap-3">
-            <h2 style={{ fontFamily: DISPLAY_FONT, fontSize: 22, fontWeight: 500, letterSpacing: '-0.01em' }}>
-              Liquid portfolio over time
-            </h2>
-            <div className="flex items-center gap-4 text-[11px]" style={{ color: T.muted }}>
-              <LegendDot color={T.oxblood} label="Conservative" />
-              <LegendDot color={T.ink} label="Moderate" />
-              <LegendDot color={T.emerald} label="Optimistic" />
-            </div>
-          </div>
-          <p className="text-[11px] mb-4" style={{ color: T.muted, fontStyle: 'italic' }}>
-            Click any year on the chart to see a detailed breakdown of income, expenses, and account flows for that year.
-          </p>
-          <div style={{ width: '100%', height: 360 }}>
-            <ResponsiveContainer>
-              <ComposedChart
-                data={chartData}
-                margin={{ top: 10, right: 24, left: 0, bottom: 12 }}
-                onClick={(state) => {
-                  if (state && state.activeLabel != null) {
-                    setAuditAge(parseInt(state.activeLabel, 10));
-                    setAuditScenario(inspectorScenario);
-                  }
-                }}
-                style={{ cursor: 'pointer' }}
-              >
-                <defs>
-                  <linearGradient id="modGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor={T.ink} stopOpacity={0.18} />
-                    <stop offset="100%" stopColor={T.ink} stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid stroke={T.ruleLight} strokeDasharray="0" vertical={false} />
-                <XAxis
-                  dataKey="age"
-                  tick={{ fill: T.muted, fontSize: 11, fontFamily: 'Geist Mono' }}
-                  axisLine={{ stroke: T.rule }}
-                  tickLine={false}
-                  label={{ value: 'Age', position: 'insideBottom', offset: -5, fill: T.muted, fontSize: 11 }}
-                />
-                <YAxis
-                  tick={{ fill: T.muted, fontSize: 11, fontFamily: 'Geist Mono' }}
-                  axisLine={false} tickLine={false}
-                  tickFormatter={(v) => fmt$(v)}
-                  width={60}
-                />
-                <Tooltip content={<ChartTooltip />} />
-                <ReferenceLine x={inp.retirementAge} stroke={T.muted} strokeDasharray="3 3" label={{ value: 'Retirement', fill: T.muted, fontSize: 10, position: 'top' }} />
-                {inp.inheritances.filter(i => i.age >= inp.currentAge && i.age <= inp.lifeExpectancy).map(i => (
-                  <ReferenceLine
-                    key={i.id}
-                    x={i.age}
-                    stroke={T.amber}
-                    strokeDasharray="2 4"
-                    strokeWidth={1}
-                    label={{ value: '🎁', fill: T.amber, fontSize: 12, position: 'top' }}
-                  />
-                ))}
-                <ReferenceLine y={0} stroke={T.ink} strokeWidth={1} />
-                <Area type="monotone" dataKey="mod" stroke="none" fill="url(#modGrad)" />
-                <Line type="monotone" dataKey="cons" stroke={T.oxblood} strokeWidth={1.5} dot={false} />
-                <Line type="monotone" dataKey="mod" stroke={T.ink} strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="opt" stroke={T.emerald} strokeWidth={1.5} dot={false} />
-              </ComposedChart>
-            </ResponsiveContainer>
-          </div>
-
-          {/* Auto-calc strip */}
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-x-3 gap-y-4 sm:gap-6 mt-6 pt-6" style={{ borderTop: `1px solid ${T.ruleLight}` }}>
-            <AutoStat label="Income taxes, yr 1 retired" value={fmt$Full(estTaxesAtRet)} help="Federal + state + LTCG. Payroll tax stops at retirement. Rental income is taxed as ordinary." />
-            <AutoStat label="Property tax, yr 1 retired" value={fmt$Full(estPropTaxAtRet)} help="Total across all properties. Scales with home value, never goes away." />
-            <AutoStat label="Healthcare, yr 1 retired" value={fmt$Full(estHealthcareAtRet)} />
-            {hasRentals && (
-              <AutoStat label="Rental income, yr 1 retired" value={fmt$Full(estRentalAtRet)} tone="good" help="Net rental income across all rental properties." />
-            )}
-            {upcomingInheritances.length > 0 && (
-              <AutoStat
-                label={upcomingInheritances.length === 1 ? 'Inheritance incoming' : `Inheritances (${upcomingInheritances.length})`}
-                value={fmt$Full(totalInheritances)}
-                tone="good"
-                help={nextInheritance ? `Next: ${fmt$Full(nextInheritance.amount)} at age ${nextInheritance.age} (${nextInheritance.age - inp.currentAge} yrs away)` : ''}
-              />
-            )}
-            <AutoStat label="Liquid runway"
-              value={sims.mod.runOutAge === null ? `≥${inp.lifeExpectancy - inp.retirementAge} yrs` : `${sims.mod.runOutAge - inp.retirementAge} yrs`}
-              tone={sims.mod.runOutAge === null ? 'good' : 'bad'}
-            />
-            <AutoStat label="Home equity tap age"
-              value={inp.useHomeEquity ? (sims.mod.homeEquityTapAge || 'Not needed') : 'Disabled'}
-            />
-            {totalChildren > 0 && (
-              <AutoStat
-                label="529 covers college"
-                value={coveragePct !== null ? `${coveragePct}%` : ','}
-                tone={coveragePct >= 90 ? 'good' : coveragePct >= 50 ? undefined : 'bad'}
-              />
-            )}
-          </div>
-        </div>
-
-        </>)}
-
-        {activeView === 'networth' && (
-          <NetWorthView
-            inp={inp}
-            sims={sims}
-          />
-        )}
-
-        {activeView === 'runway' && (
-          <RunwayView
-            inp={inp}
-            setInp={setInp}
-            set={set}
-            runways={runways}
-            auditMonth={runwayAuditMonth}
-            setAuditMonth={setRunwayAuditMonth}
-            runwayAuditScenario={runwayAuditScenario}
-            setRunwayAuditScenario={setRunwayAuditScenario}
-          />
-        )}
-
         {/* ============= INPUTS ============= */}
-        {/* id="calculator-inputs" is the anchor target for the GetStartedBanner's
-            "Jump to inputs" button. We use scrollMarginTop to offset for the
-            sticky header so the heading isn't hidden behind it when scrolled to. */}
-        <div id="calculator-inputs" style={{ borderTop: `1px solid ${T.rule}`, marginTop: 8, paddingTop: 24, scrollMarginTop: 80 }}>
+        {/* Inputs sit at the top of the page now. Users see structure at a
+            glance (collapsed sections), expand whatever they want to edit,
+            then click "See results ↓" at the bottom of the inputs panel to
+            scroll down to the computed outputs. */}
+        <div id="calculator-inputs" style={{ marginTop: 8, paddingTop: 0 }}>
           <div className="flex items-baseline justify-between mb-5 flex-wrap gap-2">
             <div>
               <div className="text-[11px] uppercase tracking-[0.18em]" style={{ color: T.muted, fontWeight: 600 }}>
@@ -3508,23 +3215,12 @@ export default function RetirementReadiness() {
         {(() => {
           // Decide badges and defaultOpen based on active view.
           //
-          // Approach: each section gets its own defaultOpen value. We collapse most
-          // sections by default to keep the page calm; only the FIRST section in each
-          // group on each tab opens by default to give the user an obvious entry point.
-          //
-          //   Net Worth tab:
-          //     - "About you" opens (first of left column)
-          //     - "Current savings & investments" opens (first of right column)
-          //     - All other sections collapsed
-          //
-          //   Retirement tab:
-          //     - "Income & career" opens (first of "New for retirement" group)
-          //     - All other sections collapsed (including all "From Net Worth" sections)
-          //
-          //   Job Loss tab:
-          //     - "Stress test assumptions" opens (first of "New for job loss" group, and
-          //       the most important runway-specific input)
-          //     - All other sections collapsed
+          // Approach: with inputs now at the TOP of the page (above outputs),
+          // all input sections start collapsed. This keeps the inputs panel
+          // compact so users can see the structure at a glance, then expand
+          // only the sections they want to edit. The Planning Horizon section
+          // on the Retirement tab is the lone exception, since it's small
+          // and almost always relevant.
           //
           const isRet = activeView === 'retirement';
           const isRun = activeView === 'runway';
@@ -3533,22 +3229,29 @@ export default function RetirementReadiness() {
           const sharedBadge = isNW ? null : BADGE_FROM_NW;
           const newBadge = isRet ? BADGE_NEW_RET : isRun ? BADGE_NEW_RUN : null;
 
-          // Per-section "open by default" flags. Specific to each tab.
+          // All input sections collapsed by default, except on the Net Worth
+          // tab where three core sections open automatically to give users
+          // an immediate "fill these in" entry point:
+          //   - About you (age, married)
+          //   - Current savings & investments (the most-edited assets)
+          //   - Credit cards & other debts (the most-edited liabilities)
+          // Other tabs (Retirement, Job Loss Runway) keep everything collapsed
+          // since they inherit from Net Worth.
           const open = {
-            aboutYou: isNW,                                   // first of left column on NW
+            aboutYou: isNW,
             children: false,
-            savings: isNW,                                    // first of right column on NW
+            savings: isNW,
             properties: false,
             vehicles: false,
-            debts: false,
+            debts: isNW,
             otherAssets: false,
-            income: isRet,                                    // first of "New for retirement"
+            income: false,
             expenses: false,
             rent: false,
             retirementIncome: false,
             inheritances: false,
             macro: false,
-            stressTest: isRun                                 // first of "New for job loss"
+            stressTest: false
           };
 
           // ---------- SHARED SECTIONS (live in Net Worth) ----------
@@ -3568,7 +3271,7 @@ export default function RetirementReadiness() {
           // projection. Lives here because it logically pairs with the rest of the
           // retirement-specific inputs.
           const planningHorizonSection = (
-            <Section icon={Calendar} title="Planning horizon" defaultOpen={true} badge={newBadge}>
+            <Section icon={Calendar} title="Planning horizon" defaultOpen={false} badge={newBadge}>
               <Slider label="Target retirement age" value={inp.retirementAge} onChange={set('retirementAge')} min={Math.max(inp.currentAge, 50)} max={80} step={1} />
               <Slider label="Life expectancy" value={inp.lifeExpectancy} onChange={set('lifeExpectancy')} min={75} max={105} step={1}
                 help="Plan for longer than the average, a 65-year-old has a meaningful chance of living past 90." />
@@ -4113,8 +3816,256 @@ export default function RetirementReadiness() {
           return null;
         })()}
 
-        {/* Net Worth tab: transition to other views, shown after inputs */}
-        {activeView === 'networth' && <WhatThisPowers onSwitchView={setActiveView} />}
+        {/* See results CTA — pairs with the inputs-on-top layout. Once the
+            user has edited what they want, this is the obvious next step:
+            scroll down to see the recomputed numbers. */}
+        <SeeResultsButton />
+
+        {/* Anchor target for the See Results button — the start of the
+            actual output content. scrollMarginTop offsets for the sticky
+            tab header. */}
+        <div id="calculator-results" style={{ scrollMarginTop: 80 }} />
+
+        {activeView === 'retirement' && (<>
+
+        {/* ============= HEADLINE RESULT ============= */}
+        {/* Same full-width verdict pattern as the Net Worth tab. Headline
+            card takes the full row to give the result prominence; the
+            Recommendation card sits below in its own full-width row. */}
+        <div className="grid grid-cols-12 gap-6 mb-6">
+          {/* Verdict card */}
+          <div className="col-span-12 p-5 sm:p-8" style={{
+            background: T.surface, border: `1px solid ${T.rule}`,
+            position: 'relative', overflow: 'hidden'
+          }}>
+            <div style={{
+              position: 'absolute', top: 0, right: 0, width: 240, height: 240,
+              background: `radial-gradient(circle at top right, ${risk.soft}, transparent 70%)`,
+              opacity: 0.6, pointerEvents: 'none'
+            }} />
+
+            <div className="relative">
+              <div className="flex items-center gap-2 mb-4">
+                <risk.icon size={14} style={{ color: risk.color }} strokeWidth={1.5} />
+                <span className="text-[11px] uppercase tracking-[0.2em]" style={{ color: risk.color, fontWeight: 600 }}>
+                  {risk.label} at age {inp.retirementAge}
+                </span>
+              </div>
+
+              <p style={{
+                fontFamily: DISPLAY_FONT, fontWeight: 400,
+                fontSize: 'clamp(22px, 2.6vw, 32px)',
+                lineHeight: 1.2, letterSpacing: '-0.01em',
+                color: T.ink, marginBottom: 24
+              }}>
+                {sims.mod.runOutAge === null ? (
+                  <>If you retire at <strong style={{ fontWeight: 600 }}>{inp.retirementAge}</strong>, your portfolio is projected to last through age <strong style={{ fontWeight: 600 }}>{inp.lifeExpectancy}</strong> under moderate assumptions.</>
+                ) : (
+                  <>If you retire at <strong style={{ fontWeight: 600 }}>{inp.retirementAge}</strong>, your liquid savings run out at age <strong style={{ fontWeight: 600, color: risk.color }}>{sims.mod.runOutAge}</strong>, <em style={{ fontStyle: 'italic' }}>{sims.mod.runOutAge - inp.retirementAge} years into retirement</em>.</>
+                )}
+              </p>
+
+              <div className="grid grid-cols-3 gap-3 sm:gap-6 pt-4 sm:pt-6" style={{ borderTop: `1px solid ${T.ruleLight}` }}>
+                <div className="min-w-0">
+                  <div className="text-[10px] uppercase tracking-[0.12em] mb-1" style={{ color: T.muted, fontWeight: 500 }}>Portfolio at retirement</div>
+                  <div style={{ fontFamily: DISPLAY_FONT, fontWeight: 500, fontSize: 'clamp(16px, 4vw, 26px)', color: T.ink, fontVariantNumeric: 'tabular-nums', wordBreak: 'break-word' }}>
+                    {fmt$Full(sims.mod.portfolioAtRetirement)}
+                  </div>
+                </div>
+                <div className="min-w-0">
+                  <div className="text-[10px] uppercase tracking-[0.12em] mb-1" style={{ color: T.muted, fontWeight: 500 }}>Net worth at retirement</div>
+                  <div style={{ fontFamily: DISPLAY_FONT, fontWeight: 500, fontSize: 'clamp(16px, 4vw, 26px)', color: T.ink, fontVariantNumeric: 'tabular-nums', wordBreak: 'break-word' }}>
+                    {fmt$Full(sims.mod.netWorthAtRetirement)}
+                  </div>
+                </div>
+                <div className="min-w-0">
+                  <div className="text-[10px] uppercase tracking-[0.12em] mb-1" style={{ color: T.muted, fontWeight: 500 }}>Years to retirement</div>
+                  <div style={{ fontFamily: DISPLAY_FONT, fontWeight: 500, fontSize: 'clamp(16px, 4vw, 26px)', color: T.ink, fontVariantNumeric: 'tabular-nums' }}>
+                    {Math.max(0, inp.retirementAge - inp.currentAge)}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Recommendation card — full-width supporting context */}
+          <div className="col-span-12 p-5 sm:p-8" style={{
+            background: T.ink, color: T.surface
+          }}>
+            <div className="flex items-center gap-2 mb-4" style={{ color: '#A8C9B5' }}>
+              <Wind size={14} strokeWidth={1.5} />
+              <span className="text-[11px] uppercase tracking-[0.2em]" style={{ fontWeight: 600 }}>
+                Our recommendation
+              </span>
+            </div>
+
+            <p style={{
+              fontFamily: DISPLAY_FONT, fontWeight: 400,
+              fontSize: 22, lineHeight: 1.3, marginBottom: 24
+            }}>
+              {safeAge !== null ? (
+                <>To retire with <strong style={{ fontWeight: 600, color: '#9DD9B5' }}>low risk</strong> of running out of money, target retirement at age <strong style={{ fontWeight: 600 }}>{safeAge}</strong>.</>
+              ) : (
+                <>Even working until 75, the conservative scenario doesn't survive, consider increasing savings, reducing expenses, or both.</>
+              )}
+            </p>
+
+            {/* Three risk profiles side-by-side on wide screens, stacked on mobile */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-5">
+              <RecRow label="Aggressive (high risk)" age={moderateAge && moderateAge < (safeAge || 999) ? moderateAge : ','} hint="Money lasts under moderate assumptions" noBorder />
+              <RecRow label="Balanced (moderate risk)" age={moderateAge !== null ? moderateAge : ','} hint="Comfortable margin in normal markets" noBorder />
+              <RecRow label="Conservative (low risk)" age={safeAge !== null ? safeAge : ','} hint="Survives bad markets & longer life" highlight noBorder />
+            </div>
+          </div>
+        </div>
+
+        {/* ============= NET WORTH INSPECTOR ============= */}
+        <NetWorthInspector
+          snapshot={nwSnapshot}
+          snapshotNoInh={nwSnapshotNoInh}
+          inheritanceReceived={inheritanceReceivedToDate}
+          inspectorAge={effectiveInspectorAge}
+          minAge={inp.currentAge}
+          maxAge={inp.lifeExpectancy}
+          onAgeChange={setInspectorAge}
+          isCurrent={effectiveInspectorAge === inp.currentAge}
+          scenario={inspectorScenario}
+          onScenarioChange={setInspectorScenario}
+          onAuditYear={() => { setAuditAge(effectiveInspectorAge); setAuditScenario(inspectorScenario); }}
+        />
+
+        {/* ============= SCENARIO TRIPTYCH ============= */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+          <ScenarioCard scenario="cons" sim={sims.cons} label="Conservative" subtitle="Returns −2pts · expenses +12% · life +3 yrs" inp={inp} />
+          <ScenarioCard scenario="mod" sim={sims.mod} label="Moderate" subtitle="Your inputs as-is" inp={inp} />
+          <ScenarioCard scenario="opt" sim={sims.opt} label="Optimistic" subtitle="Returns +1.5pts · expenses −8% · life −2 yrs" inp={inp} />
+        </div>
+
+        {/* ============= CHART ============= */}
+        <div className="mb-10 p-4 sm:p-6" style={{ background: T.surface, border: `1px solid ${T.rule}` }}>
+          <div className="flex items-baseline justify-between mb-2 flex-wrap gap-3">
+            <h2 style={{ fontFamily: DISPLAY_FONT, fontSize: 22, fontWeight: 500, letterSpacing: '-0.01em' }}>
+              Liquid portfolio over time
+            </h2>
+            <div className="flex items-center gap-4 text-[11px]" style={{ color: T.muted }}>
+              <LegendDot color={T.oxblood} label="Conservative" />
+              <LegendDot color={T.ink} label="Moderate" />
+              <LegendDot color={T.emerald} label="Optimistic" />
+            </div>
+          </div>
+          <p className="text-[11px] mb-4" style={{ color: T.muted, fontStyle: 'italic' }}>
+            Click any year on the chart to see a detailed breakdown of income, expenses, and account flows for that year.
+          </p>
+          <div style={{ width: '100%', height: 360 }}>
+            <ResponsiveContainer>
+              <ComposedChart
+                data={chartData}
+                margin={{ top: 10, right: 24, left: 0, bottom: 12 }}
+                onClick={(state) => {
+                  if (state && state.activeLabel != null) {
+                    setAuditAge(parseInt(state.activeLabel, 10));
+                    setAuditScenario(inspectorScenario);
+                  }
+                }}
+                style={{ cursor: 'pointer' }}
+              >
+                <defs>
+                  <linearGradient id="modGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={T.ink} stopOpacity={0.18} />
+                    <stop offset="100%" stopColor={T.ink} stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid stroke={T.ruleLight} strokeDasharray="0" vertical={false} />
+                <XAxis
+                  dataKey="age"
+                  tick={{ fill: T.muted, fontSize: 11, fontFamily: 'Geist Mono' }}
+                  axisLine={{ stroke: T.rule }}
+                  tickLine={false}
+                  label={{ value: 'Age', position: 'insideBottom', offset: -5, fill: T.muted, fontSize: 11 }}
+                />
+                <YAxis
+                  tick={{ fill: T.muted, fontSize: 11, fontFamily: 'Geist Mono' }}
+                  axisLine={false} tickLine={false}
+                  tickFormatter={(v) => fmt$(v)}
+                  width={60}
+                />
+                <Tooltip content={<ChartTooltip />} />
+                <ReferenceLine x={inp.retirementAge} stroke={T.muted} strokeDasharray="3 3" label={{ value: 'Retirement', fill: T.muted, fontSize: 10, position: 'top' }} />
+                {inp.inheritances.filter(i => i.age >= inp.currentAge && i.age <= inp.lifeExpectancy).map(i => (
+                  <ReferenceLine
+                    key={i.id}
+                    x={i.age}
+                    stroke={T.amber}
+                    strokeDasharray="2 4"
+                    strokeWidth={1}
+                    label={{ value: '🎁', fill: T.amber, fontSize: 12, position: 'top' }}
+                  />
+                ))}
+                <ReferenceLine y={0} stroke={T.ink} strokeWidth={1} />
+                <Area type="monotone" dataKey="mod" stroke="none" fill="url(#modGrad)" />
+                <Line type="monotone" dataKey="cons" stroke={T.oxblood} strokeWidth={1.5} dot={false} />
+                <Line type="monotone" dataKey="mod" stroke={T.ink} strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="opt" stroke={T.emerald} strokeWidth={1.5} dot={false} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Auto-calc strip */}
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-x-3 gap-y-4 sm:gap-6 mt-6 pt-6" style={{ borderTop: `1px solid ${T.ruleLight}` }}>
+            <AutoStat label="Income taxes, yr 1 retired" value={fmt$Full(estTaxesAtRet)} help="Federal + state + LTCG. Payroll tax stops at retirement. Rental income is taxed as ordinary." />
+            <AutoStat label="Property tax, yr 1 retired" value={fmt$Full(estPropTaxAtRet)} help="Total across all properties. Scales with home value, never goes away." />
+            <AutoStat label="Healthcare, yr 1 retired" value={fmt$Full(estHealthcareAtRet)} />
+            {hasRentals && (
+              <AutoStat label="Rental income, yr 1 retired" value={fmt$Full(estRentalAtRet)} tone="good" help="Net rental income across all rental properties." />
+            )}
+            {upcomingInheritances.length > 0 && (
+              <AutoStat
+                label={upcomingInheritances.length === 1 ? 'Inheritance incoming' : `Inheritances (${upcomingInheritances.length})`}
+                value={fmt$Full(totalInheritances)}
+                tone="good"
+                help={nextInheritance ? `Next: ${fmt$Full(nextInheritance.amount)} at age ${nextInheritance.age} (${nextInheritance.age - inp.currentAge} yrs away)` : ''}
+              />
+            )}
+            <AutoStat label="Liquid runway"
+              value={sims.mod.runOutAge === null ? `≥${inp.lifeExpectancy - inp.retirementAge} yrs` : `${sims.mod.runOutAge - inp.retirementAge} yrs`}
+              tone={sims.mod.runOutAge === null ? 'good' : 'bad'}
+            />
+            <AutoStat label="Home equity tap age"
+              value={inp.useHomeEquity ? (sims.mod.homeEquityTapAge || 'Not needed') : 'Disabled'}
+            />
+            {totalChildren > 0 && (
+              <AutoStat
+                label="529 covers college"
+                value={coveragePct !== null ? `${coveragePct}%` : ','}
+                tone={coveragePct >= 90 ? 'good' : coveragePct >= 50 ? undefined : 'bad'}
+              />
+            )}
+          </div>
+        </div>
+
+        </>)}
+
+        {activeView === 'networth' && (
+          <NetWorthView
+            inp={inp}
+            sims={sims}
+            setActiveView={setActiveView}
+          />
+        )}
+
+        {activeView === 'runway' && (
+          <RunwayView
+            inp={inp}
+            setInp={setInp}
+            set={set}
+            runways={runways}
+            auditMonth={runwayAuditMonth}
+            setAuditMonth={setRunwayAuditMonth}
+            runwayAuditScenario={runwayAuditScenario}
+            setRunwayAuditScenario={setRunwayAuditScenario}
+          />
+        )}
+
 
         {/* ============= FOOTER NOTE ============= */}
         <div className="mt-12 pt-6 text-[11px] leading-relaxed" style={{ borderTop: `1px solid ${T.rule}`, color: T.muted, maxWidth: 720 }}>
@@ -4210,10 +4161,10 @@ function ScenarioCard({ scenario, sim, label, subtitle, inp }) {
   );
 }
 
-function RecRow({ label, age, hint, highlight }) {
+function RecRow({ label, age, hint, highlight, noBorder }) {
   return (
     <div className="flex items-center justify-between py-2.5 gap-3" style={{
-      borderBottom: highlight ? 'none' : '1px solid rgba(255,255,255,0.08)'
+      borderBottom: (highlight || noBorder) ? 'none' : '1px solid rgba(255,255,255,0.08)'
     }}>
       <div className="min-w-0">
         <div className="text-[11px] sm:text-[12px]" style={{ color: highlight ? '#9DD9B5' : '#C9C4BB', fontWeight: 500 }}>{label}</div>

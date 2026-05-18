@@ -603,17 +603,23 @@ function CrossReferences() {
           title="Other paths through a transition"
           desc="This guide assumes a sudden, involuntary layoff. If your circumstances are different, these guides may be more useful."
         />
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <CrossRefCard
             label="Available now"
             title="Leaving on your terms"
-            body="Voluntary departures: quitting, retiring early, planning an exit. Combined guide that walks through the timeline from months out through the first weeks after leaving."
+            body="Voluntary departures: quitting, retiring early, planning an exit. From months out through the first weeks after leaving."
             to="/leaving-on-your-terms"
+          />
+          <CrossRefCard
+            label="Available now"
+            title="After a loss"
+            body="Losing a family member. Practical decisions, who to contact, religious traditions, and grief, sequenced by typical timing."
+            to="/loss"
           />
           <CrossRefCard
             label="Hub"
             title="Transitions"
-            body="The starting point for all transitions guides on the site. If your situation doesn't quite fit a layoff or a voluntary departure, the hub helps you find the right page."
+            body="The starting point for all transitions guides. If your situation is different from these, the hub helps you find the right page."
             to="/transitions"
           />
         </div>
@@ -687,6 +693,9 @@ function Footer() {
             </Link>
             <Link to="/leaving-on-your-terms" style={{ display: 'block', fontSize: 13, color: T.ink, textDecoration: 'none', marginBottom: 6 }}>
               Leaving on your terms
+            </Link>
+            <Link to="/loss" style={{ display: 'block', fontSize: 13, color: T.ink, textDecoration: 'none', marginBottom: 6 }}>
+              After a loss
             </Link>
           </div>
         </div>

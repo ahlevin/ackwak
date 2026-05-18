@@ -11,6 +11,7 @@ import RetirementReadiness from './components/RetirementReadiness.jsx';
 import JustLaidOffPage from './JustLaidOffPage.jsx';
 import LeavingOnYourTermsPage from './LeavingOnYourTermsPage.jsx';
 import TransitionsHubPage from './TransitionsHubPage.jsx';
+import AfterLossPage from './AfterLossPage.jsx';
 
 // Theme tokens shared with the calculator
 const T = {
@@ -51,6 +52,7 @@ export default function App() {
         <Route path="/transitions" element={<TransitionsHubPage />} />
         <Route path="/just-laid-off" element={<JustLaidOffPage />} />
         <Route path="/leaving-on-your-terms" element={<LeavingOnYourTermsPage />} />
+        <Route path="/loss" element={<AfterLossPage />} />
         {/* Catch-all: anything else goes home. Friendlier than a 404. */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
@@ -184,7 +186,7 @@ export function SiteNav() {
   const isActive = (link) => {
     if (link.type !== 'route') return false;
     if (pathname === link.to) return true;
-    if (link.to === '/transitions' && (pathname === '/just-laid-off' || pathname === '/leaving-on-your-terms')) {
+    if (link.to === '/transitions' && (pathname === '/just-laid-off' || pathname === '/leaving-on-your-terms' || pathname === '/loss')) {
       return true;
     }
     return false;
@@ -1196,24 +1198,31 @@ function TransitionsSection() {
             fontSize: 'clamp(15px, 1.8vw, 18px)', lineHeight: 1.55,
             color: T.inkSoft, maxWidth: 720
           }}>
-            Beyond the calculator, growing library of practical content for the moments that matter. Layoffs, voluntary departures, and the financial decisions that come with each. Sequenced advice, state-specific data, no fluff.
+            Beyond the calculators, a growing library of practical content for the moments that matter. Layoffs, voluntary departures, the loss of a family member, and the practical and emotional decisions that come with each. Sequenced advice, things to think about, who to contact and when, no fluff.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
           <TransitionCard
             to="/just-laid-off"
             accent={T.oxblood}
-            label="It happened to me"
+            label="Sudden, involuntary"
             title="Just laid off"
-            body="The first week after a layoff, in order. Severance, unemployment, COBRA, the immediate financial scaffolding. State-specific data for the top 15 states."
+            body="The first week after a layoff, in order. Severance, unemployment, COBRA. State-specific data."
           />
           <TransitionCard
             to="/leaving-on-your-terms"
             accent={T.emerald}
-            label="It was my call"
+            label="Your decision"
             title="Leaving on your terms"
-            body="Quitting for a new job, starting your own thing, retiring early, or just done. Four-phase timeline from months out through the first weeks free."
+            body="Quitting for a new job, starting your own thing, retiring early, or just done. Months out through the first weeks free."
+          />
+          <TransitionCard
+            to="/loss"
+            accent={T.navy}
+            label="A family member"
+            title="After a loss"
+            body="What to think about after losing a family member. Practical decisions, who to contact, religious traditions, and grief."
           />
         </div>
 

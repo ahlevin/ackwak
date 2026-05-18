@@ -16,7 +16,7 @@
 
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, AlertTriangle, Sparkles, Zap, HandshakeIcon, Lock } from 'lucide-react';
+import { ArrowRight, AlertTriangle, Sparkles, Zap, HandshakeIcon, Lock, Heart } from 'lucide-react';
 import { SiteNav } from './App.jsx';
 
 const T = {
@@ -85,7 +85,7 @@ function Hero() {
           lineHeight: 1.4, letterSpacing: '-0.01em', color: T.inkSoft,
           marginBottom: 0
         }}>
-          Different work transitions need different things. Pick the one that fits, and we'll get out of your way.
+          Different life transitions need different things. Pick the one that fits, and we'll get out of your way.
         </p>
       </div>
     </section>
@@ -98,15 +98,15 @@ function Hero() {
 function AudienceCards() {
   return (
     <section style={{ background: T.bg }}>
-      <div className="max-w-4xl mx-auto px-5 sm:px-8" style={{ paddingTop: 48, paddingBottom: 24 }}>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div className="max-w-5xl mx-auto px-5 sm:px-8" style={{ paddingTop: 48, paddingBottom: 24 }}>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <AudienceCard
             to="/just-laid-off"
             accent={T.oxblood}
             icon={Zap}
-            label="It happened to me"
+            label="Sudden, involuntary"
             title="Just laid off"
-            blurb="Involuntary, sudden, often emotionally hard. The first week, in order: severance, unemployment, COBRA, the immediate financial scaffolding."
+            blurb="The first week after a layoff, in order. Severance, unemployment, COBRA, the immediate financial scaffolding."
             sample={[
               'Day-by-day playbook for the first week',
               'State-specific unemployment data',
@@ -117,13 +117,26 @@ function AudienceCards() {
             to="/leaving-on-your-terms"
             accent={T.emerald}
             icon={HandshakeIcon}
-            label="It was my call"
+            label="Your decision"
             title="Leaving on your terms"
-            blurb="Quitting for a new job, starting your own thing, retiring early, or just done with the role. Walks through the timeline from months out (thinking about it) through giving notice and the first weeks free."
+            blurb="Quitting for a new job, starting your own thing, retiring early, or just done. From months out through giving notice and the first weeks free."
             sample={[
               'Four-phase timeline from months out to after',
               'Counter-offers, vesting, equity windows',
-              'No severance and limited UI: planning matters more'
+              'Limited UI: planning matters more'
+            ]}
+          />
+          <AudienceCard
+            to="/loss"
+            accent={T.navy}
+            icon={Heart}
+            label="A family member"
+            title="After a loss"
+            blurb="What to think about after losing a family member. Practical decisions, who to contact, religious traditions, and grief, sequenced by typical timing."
+            sample={[
+              'First 72 hours through the first year',
+              'Executor responsibilities if it\'s your role',
+              'Religious traditions, briefly covered'
             ]}
           />
         </div>
@@ -236,13 +249,13 @@ function NotSureGuidance() {
             Not sure which one fits?
           </div>
           <p style={{ fontSize: 14, lineHeight: 1.55, color: T.ink, margin: 0, marginBottom: 8 }}>
-            Most readers self-sort easily on one question: <strong>was it your decision?</strong> If yes, Leaving on Your Terms is for you, whether you're heading to a new job, starting your own thing, retiring early, taking time off, or just done with the current role. If the decision wasn't yours, Just Laid Off is the right guide.
+            For work transitions, the question is usually: <strong>was it your decision?</strong> If yes, Leaving on Your Terms is for you, whether you're heading to a new job, starting your own thing, retiring early, taking time off, or just done with the current role. If the decision wasn't yours, Just Laid Off is the right guide. After a Loss is for losing a family member.
           </p>
           <p style={{ fontSize: 13, lineHeight: 1.55, color: T.inkSoft, margin: 0, marginBottom: 8 }}>
-            A few situations sit between the two: if you're worried about an upcoming layoff but it hasn't happened yet, the Just Laid Off guide's planning content is probably more useful. If you're quitting because you suspect you're about to be laid off, both guides apply, but start with Leaving on Your Terms.
+            A few situations sit between the work-related guides: if you're worried about an upcoming layoff but it hasn't happened yet, the Just Laid Off guide's planning content is probably more useful. If you're quitting because you suspect you're about to be laid off, both guides apply, but start with Leaving on Your Terms.
           </p>
           <p style={{ fontSize: 13, lineHeight: 1.55, color: T.inkSoft, margin: 0 }}>
-            The financial topics (health insurance, 401(k), runway, taxes) overlap a lot. Reading both is reasonable if your situation is messy.
+            Some topics (taxes, retirement accounts, insurance) overlap across guides. Reading more than one is reasonable if your situation is complex.
           </p>
         </div>
       </div>
@@ -273,7 +286,7 @@ function WhatsHere() {
           </h2>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <PreviewCard
             title="Just laid off"
             to="/just-laid-off"
@@ -297,6 +310,19 @@ function WhatsHere() {
               'Giving notice: counter-offers, non-competes',
               'After your last day: the first weeks free',
               'Things to think twice about'
+            ]}
+          />
+          <PreviewCard
+            title="After a loss"
+            to="/loss"
+            accent={T.navy}
+            sections={[
+              'First 72 hours: pronouncement, immediate steps',
+              'First two weeks: certificates, notifications',
+              'If you\'re the executor or trustee',
+              'First few months: home, family, grief',
+              'Year-of-death tax considerations',
+              'Religious and cultural traditions'
             ]}
           />
         </div>
@@ -409,6 +435,9 @@ function Footer() {
             </Link>
             <Link to="/leaving-on-your-terms" style={{ display: 'block', fontSize: 13, color: T.ink, textDecoration: 'none', marginBottom: 6 }}>
               Leaving on your terms
+            </Link>
+            <Link to="/loss" style={{ display: 'block', fontSize: 13, color: T.ink, textDecoration: 'none', marginBottom: 6 }}>
+              After a loss
             </Link>
           </div>
         </div>

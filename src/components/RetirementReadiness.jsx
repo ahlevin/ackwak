@@ -68,7 +68,7 @@ const BADGE_NEW_RUN = { label: 'New for runway', color: '#B25E00', bg: '#FBEFD9'
 // migrations from the saved version up to current. If anything required
 // user attention, we log it to a warnings array surfaced as a banner.
 
-const CURRENT_SCHEMA_VERSION = 4;
+const CURRENT_SCHEMA_VERSION = 6;
 
 const APP_VERSION = '1.0';
 
@@ -182,6 +182,64 @@ const MIGRATIONS = {
       };
     }
     return { inputs, warnings };
+  },
+  // v4 -> v5: severance breakdown + COBRA subsidy modeling.
+  //   - Old `severanceAmount` (single dollar field) is preserved and used in
+  //     the new "total" mode. Existing scenarios continue to work without
+  //     change. Default mode is 'total' for migrated scenarios so behavior
+  //     is identical to v4.
+  //   - PTO payout is new and defaults to 0.
+  //   - COBRA subsidy duration defaults to 0 (no subsidy), so existing
+  //     scenarios continue paying COBRA from month 1.
+  //   - Post-subsidy COBRA behavior defaults to 'cobra_full' for migrated
+  //     scenarios so the simulation continues using `cobraMonthly` exactly
+  //     as it did in v4. (New scenarios get 'aca' as a more realistic default
+  //     in the DEFAULT_INPUTS object.)
+  //   - `severanceAnnualPay` defaults to 0 (meaning "use current income").
+  //     The formula computes weeklyPay = (severanceAnnualPay > 0 ?
+  //     severanceAnnualPay : income) / 52.
+  5: (raw) => {
+    const warnings = [];
+    const inputs = { ...raw };
+    if (inputs.severanceMode === undefined) inputs.severanceMode = 'total';
+    if (inputs.severanceLumpWeeks === undefined) inputs.severanceLumpWeeks = 4;
+    if (inputs.severanceWeeksPerYear === undefined) inputs.severanceWeeksPerYear = 2;
+    if (inputs.severanceYearsOfService === undefined) inputs.severanceYearsOfService = 5;
+    if (inputs.severanceAnnualPay === undefined) inputs.severanceAnnualPay = 0;
+    if (inputs.ptoPayout === undefined) inputs.ptoPayout = 0;
+    if (inputs.cobraSubsidyMonths === undefined) inputs.cobraSubsidyMonths = 0;
+    if (inputs.cobraAfterSubsidy === undefined) inputs.cobraAfterSubsidy = 'cobra_full';
+    return { inputs, warnings };
+  },
+  // v5 -> v6: partner income as a first-class household financial fact.
+  // Until v6, `inp.income` was ambiguous — the user might enter just their
+  // own income or combined household. The tax engine and runway simulation
+  // each made different assumptions, causing subtle math errors. v6 splits
+  // these explicitly:
+  //   - `inp.income` is now the user's income only
+  //   - `inp.partnerIncome` is the partner's annual income (0 = single or
+  //     partner doesn't earn)
+  //   - The tax engine sums them for married filing jointly brackets
+  //   - The runway sim zeros out the user's income (job loss) but keeps the
+  //     partner's flowing (if `partnerKeepsIncome` is true)
+  //
+  // For migrated scenarios, partnerIncome defaults to 0, so the tax math is
+  // unchanged. Existing married scenarios with `inp.income` representing
+  // household income will under-report tax — but only until the user adds
+  // a partner income value, at which point everything lines up.
+  6: (raw) => {
+    const warnings = [];
+    const inputs = { ...raw };
+    if (inputs.partnerIncome === undefined) inputs.partnerIncome = 0;
+    if (inputs.partnerRetirementAge === undefined) inputs.partnerRetirementAge = null;
+    if (inputs.partnerEarningYears === undefined) inputs.partnerEarningYears = null;
+    if (inputs.partnerSalaryGrowth === undefined) inputs.partnerSalaryGrowth = null;
+    if (inputs.married && inputs.partnerIncome === 0) {
+      warnings.push(
+        'Partner income is now a separate field. If your "Current annual income" included household income, add the partner\'s amount under Income & career (Retirement tab) for accurate tax projections.'
+      );
+    }
+    return { inputs, warnings };
   }
 };
 
@@ -226,6 +284,55 @@ function migrateScenario(saved) {
 // ============================================================================
 // FINANCIAL CALCULATIONS
 // ============================================================================
+
+// ----- Severance and COBRA helpers -----
+// Compute the effective severance dollar total from inputs. In 'formula' mode,
+// this multiplies (lump weeks + weeks-per-year × years of service) by the
+// weekly pay rate, where weekly pay = annual pay ÷ 52. Annual pay defaults
+// to the user's current income; they can override it (useful if severance is
+// computed off base salary excluding bonus, or if they had a recent raise).
+// In 'total' mode, it's just the user's entered amount. PTO payout is added
+// in both modes.
+function computeSeveranceTotal(inp) {
+  const ptoPayout = Math.max(0, inp.ptoPayout || 0);
+  if (inp.severanceMode === 'formula') {
+    const lumpWeeks = Math.max(0, inp.severanceLumpWeeks || 0);
+    const weeksPerYear = Math.max(0, inp.severanceWeeksPerYear || 0);
+    const years = Math.max(0, inp.severanceYearsOfService || 0);
+    const totalWeeks = lumpWeeks + weeksPerYear * years;
+    const annualPay = inp.severanceAnnualPay > 0
+      ? inp.severanceAnnualPay
+      : (inp.income || 0);
+    const weeklyPay = annualPay / 52;
+    return totalWeeks * weeklyPay + ptoPayout;
+  }
+  return Math.max(0, inp.severanceAmount || 0) + ptoPayout;
+}
+
+// COBRA cost for a given month of the runway simulation. During the subsidy
+// period the employer covers it (returns 0). After subsidy, the user's choice
+// determines ongoing cost:
+//   - 'cobra_full': pay full COBRA premium until federal max (18 months from
+//     separation), then revert to ACA
+//   - 'aca': use the existing pre-Medicare healthcare assumption (typically
+//     a marketplace plan). This is the most common real-world choice.
+//   - 'none': $0 (covered by spouse, new employer, or other source)
+//
+// monthIndex is 1-based (first month of runway is 1).
+function computeCobraCost(inp, monthIndex) {
+  const subsidyMonths = Math.max(0, inp.cobraSubsidyMonths || 0);
+  if (monthIndex <= subsidyMonths) return 0;  // subsidy still active
+  const choice = inp.cobraAfterSubsidy || 'aca';
+  if (choice === 'none') return 0;
+  if (choice === 'cobra_full') {
+    // COBRA is federally capped at 18 months. After that, the user must
+    // switch to ACA whether they wanted to or not.
+    if (monthIndex <= 18) return inp.cobraMonthly || 0;
+    return (inp.hcPreMedicare || 0) / 12;
+  }
+  // Default 'aca' — switch to marketplace as soon as the subsidy ends.
+  return (inp.hcPreMedicare || 0) / 12;
+}
 
 // ----- RSU vesting math -----
 // Given a single grant and a target projection year (years from "today"),
@@ -416,7 +523,7 @@ function simulate(inp, scenario = 'mod') {
       totalAssets: totAssetsNow,
       totalLiabilities: totLiabNow,
       netWorth: totAssetsNow - totLiabNow,
-      grossIncome: 0, salary: 0, baseSalary: 0, rsuIncome: 0, ssIncome: 0, altIncome: 0, rentalIncome: 0, inheritance: 0,
+      grossIncome: 0, salary: 0, yourSalary: 0, partnerSalary: 0, baseSalary: 0, rsuIncome: 0, ssIncome: 0, altIncome: 0, rentalIncome: 0, inheritance: 0,
       taxes: 0, propertyTax: 0, vehicleLoanPayments: 0, debtPayments: 0, rentPayment: 0,
       livingExpenses: 0, totalSpend: 0, expenses: 0,
       healthcare: 0, college: 0, mortgagePayment: 0, netFlow: 0
@@ -426,6 +533,11 @@ function simulate(inp, scenario = 'mod') {
   for (let y = 0; y <= years; y++) {
     const age = inp.currentAge + y;
     const isWorking = age < inp.retirementAge && y < inp.earningYears;
+    // Partner career timing: defaults to same as user's if not specified.
+    const partnerRetireAge = inp.partnerRetirementAge ?? inp.retirementAge;
+    const partnerEarningYrs = inp.partnerEarningYears ?? inp.earningYears;
+    const partnerSalaryGrow = inp.partnerSalaryGrowth ?? inp.salaryGrowth;
+    const partnerIsWorking = age < partnerRetireAge && y < partnerEarningYrs && (inp.partnerIncome || 0) > 0;
     const infl = Math.pow(1 + inp.inflation, y);
 
     // ----- Inheritances arriving this year -----
@@ -442,15 +554,20 @@ function simulate(inp, scenario = 'mod') {
     }
 
     // ----- Income -----
-    let salary = isWorking ? inp.income * Math.pow(1 + inp.salaryGrowth, y) : 0;
+    // User's salary, RSU income, and partner's salary are computed separately
+    // so the audit drawer can show them as distinct line items. They're all
+    // summed into `salary` (which is what the rest of the simulation reads)
+    // for tax computation, savings allocation, etc.
+    let userSalary = isWorking ? inp.income * Math.pow(1 + inp.salaryGrowth, y) : 0;
+    let partnerSalary = partnerIsWorking ? (inp.partnerIncome || 0) * Math.pow(1 + partnerSalaryGrow, y) : 0;
     // RSU income vests on a schedule and is treated as W-2 wages at vest.
-    // Only counted while working — once retired, vesting ends (the employer
-    // wouldn't be granting/holding RSUs for a non-employee).
+    // Only counted while user is working — once retired, vesting ends (the
+    // employer wouldn't be granting/holding RSUs for a non-employee).
+    // RSUs are modeled as the user's, not the partner's (V1 simplification).
     let rsuIncome = isWorking ? computeTotalRsuIncome(inp.rsu, y) : 0;
-    // Add RSU income to salary so it flows through wage growth, FICA, and
-    // income allocation just like base pay. We do NOT inflation-adjust RSU
-    // income — the share price input is assumed flat (no growth model).
-    salary += rsuIncome;
+    // Combined wage income: user + partner + RSU. This is the figure that
+    // flows through FICA, federal/state taxes, and the savings allocation.
+    let salary = userSalary + partnerSalary + rsuIncome;
     let ssIncome = age >= inp.ssStartAge ? inp.socialSecurity * infl : 0;
     let altIncome = (age >= inp.altStartAge && age <= inp.altEndAge) ? inp.altIncome * infl : 0;
 
@@ -586,11 +703,15 @@ function simulate(inp, scenario = 'mod') {
     // ----- Taxes -----
     // Treat 85% of SS as taxable (simplified). Withdrawals from 401k counted as ordinary income.
     // Rental income is treated as ordinary (no depreciation modeled).
+    // FICA/payroll applies when *either* earner is working — partner could be
+    // earning wages while user is retired, in which case FICA still applies
+    // to the partner's salary portion.
     const taxableOrdinary = salary + ssIncome * 0.85 + altIncome + rentalIncome;
+    const anyoneWorking = isWorking || partnerIsWorking;
     const taxes = estimateTax({
       ordinaryIncome: taxableOrdinary,
       married: inp.married,
-      isWorking,
+      isWorking: anyoneWorking,
       stateRate: inp.stateRate,
       stateCode: inp.stateCode,
       useStateBrackets: inp.useStateBrackets
@@ -772,10 +893,14 @@ function simulate(inp, scenario = 'mod') {
       netWorth,
       grossIncome,
       salary,
-      // Track RSU and base salary separately so the audit drawer can show
-      // RSU income as its own line item. `salary` above is the combined
-      // wage figure used for tax computation; `baseSalary` is the wage
-      // component before RSUs.
+      // Salary breakdown: user (yourSalary), partner (partnerSalary), RSU
+      // (rsuIncome) — all stored separately so the audit drawer can show
+      // each as a distinct line item. `salary` above is the combined wage
+      // figure used for tax computation.
+      // `baseSalary` is kept for backward compatibility (combined wages
+      // excluding RSU). Newer code should prefer the more granular fields.
+      yourSalary: userSalary,
+      partnerSalary,
       baseSalary: salary - rsuIncome,
       rsuIncome,
       ssIncome,
@@ -846,8 +971,12 @@ function simulateRunway(inp, mode = 'typical') {
 
   // Monthly expenses, current values (pre-retirement, no inflation applied in short window)
   const livingMonthly = (inp.annualExpenses || 0) / 12;
-  // Healthcare: replaced by COBRA if employed-coverage was the source
-  const cobraMonthly = inp.cobraMonthly || 1800;
+  // Healthcare cost varies month-by-month based on COBRA subsidy and what the
+  // user chooses after the subsidy ends. See computeCobraCost() helper.
+  // Subsidy is tied to the employer providing it, so we only honor it when
+  // useSeverance is true (i.e., the user is taking advantage of the severance
+  // package). If they decline the package, the subsidy goes with it.
+  const honorSubsidy = adj.useSeverance;
 
   // Mortgage payments and rent (these continue regardless of employment)
   let mortgageMonthly = 0;
@@ -915,14 +1044,19 @@ function simulateRunway(inp, mode = 'typical') {
     }
   }
 
-  // Partner income (assumed to continue if married and option is on)
+  // Partner income (assumed to continue if married and option is on).
+  // Uses the dedicated partnerIncome field from About You. Replaces the
+  // old "partnerIncomePortion percentage" model, which was fragile and
+  // required users to back-compute their partner's income.
   let partnerIncomeMonthly = 0;
-  if (adj.usePartner && inp.income > 0) {
-    partnerIncomeMonthly = (inp.income * (inp.partnerIncomePortion || 0.40)) / 12;
+  if (adj.usePartner && (inp.partnerIncome || 0) > 0) {
+    partnerIncomeMonthly = (inp.partnerIncome || 0) / 12;
   }
 
-  // Severance (paid out over N months)
-  const severanceTotal = adj.useSeverance ? (inp.severanceAmount || 0) : 0;
+  // Severance (paid out over N months). The total may come from the formula
+  // entry mode (lump weeks + weeks-per-year × tenure) or direct dollar entry.
+  // PTO payout is included in both modes via the helper.
+  const severanceTotal = adj.useSeverance ? computeSeveranceTotal(inp) : 0;
   const severanceMonths = Math.max(1, inp.severancePaymentMonths || 1);
   const severancePerMonth = severanceTotal / severanceMonths;
 
@@ -956,8 +1090,15 @@ function simulateRunway(inp, mode = 'typical') {
     const gigThisMonth = (m >= gigStart && m <= gigEnd) ? gigMonthly : 0;
     const monthlyIncome = sevThisMonth + uiThisMonth + gigThisMonth + partnerIncomeMonthly + rentalIncomeMonthly + altIncomeMonthly;
 
-    // Expenses for this month
-    const monthlyExpenses = livingMonthlyAdjusted + cobraMonthly + mortgageMonthly + rentMonthly + propTaxMonthly + vehicleMonthly + debtMonthly + educationMonthly;
+    // Expenses for this month. Healthcare cost varies month-by-month based on
+    // COBRA subsidy timing and the user's chosen post-subsidy plan.
+    // When the user declines the severance package (bare scenario), they also
+    // lose any employer-provided COBRA subsidy: we treat them as if subsidy=0.
+    const cobraThisMonth = honorSubsidy
+      ? computeCobraCost(inp, m)
+      : computeCobraCost({ ...inp, cobraSubsidyMonths: 0 }, m);
+
+    const monthlyExpenses = livingMonthlyAdjusted + cobraThisMonth + mortgageMonthly + rentMonthly + propTaxMonthly + vehicleMonthly + debtMonthly + educationMonthly;
 
     const netFlow = monthlyIncome - monthlyExpenses;
 
@@ -1010,7 +1151,7 @@ function simulateRunway(inp, mode = 'typical') {
           rentalIncome: rentalIncomeMonthly,
           altIncome: altIncomeMonthly,
           livingExpenses: livingMonthlyAdjusted,
-          cobra: cobraMonthly,
+          cobra: cobraThisMonth,
           mortgage: mortgageMonthly,
           rent: rentMonthly,
           propertyTax: propTaxMonthly,
@@ -1048,7 +1189,7 @@ function simulateRunway(inp, mode = 'typical') {
       altIncome: altIncomeMonthly,
       // Expense breakdown
       livingExpenses: livingMonthlyAdjusted,
-      cobra: cobraMonthly,
+      cobra: cobraThisMonth,
       mortgage: mortgageMonthly,
       rent: rentMonthly,
       propertyTax: propTaxMonthly,
@@ -1083,7 +1224,7 @@ function simulateRunway(inp, mode = 'typical') {
       gigStart,
       gigEnd,
       partnerIncomeMonthly,
-      cobraMonthly,
+      cobraMonthly: inp.cobraMonthly || 0,
       expenseCut: adj.expenseCut,
       livingMonthlyAdjusted,
       mortgageMonthly,
@@ -2030,7 +2171,11 @@ function RunwayView({ inp, setInp, set, runways, auditMonth, setAuditMonth, runw
         <AutoStat
           label="COBRA / health monthly"
           value={fmt$Full(sim.inputs.cobraMonthly)}
-          help="Replaces employer-provided coverage"
+          help={
+            (inp.cobraSubsidyMonths || 0) > 0
+              ? `Replaces employer-provided coverage. Employer subsidy covers months 1–${inp.cobraSubsidyMonths}.`
+              : 'Replaces employer-provided coverage. No employer subsidy.'
+          }
         />
         <AutoStat
           label="Adjusted living expenses"
@@ -2415,6 +2560,15 @@ export default function RetirementReadiness() {
     earningYears: 20,
     salaryGrowth: 0.03,
 
+    // Partner income. If null, the partner field defaults to the user's
+    // equivalent at compute time (e.g., partner retires when user retires).
+    // partnerIncome = 0 means "no partner income" (single, or partner doesn't
+    // earn), which is also the default for single-filer scenarios.
+    partnerIncome: 0,
+    partnerRetirementAge: null,    // null = same as user's retirement age
+    partnerEarningYears: null,      // null = same as user's earning years
+    partnerSalaryGrowth: null,      // null = same as user's salary growth
+
     // RSU grants. Empty by default. When user adds grants, each one is a
     // structured object: { id, label, shares, grantYearOffset, vestingYears,
     // cliffMonths, frequency }. See computeRsuIncome for vesting math.
@@ -2523,11 +2677,24 @@ export default function RetirementReadiness() {
 
     // Job loss stress test inputs
     // These only apply to the Job Loss Runway view, not the retirement projection.
-    severanceAmount: 0,             // total severance dollars
+    //
+    // Severance has two entry modes:
+    //   - 'formula': computed from lump weeks + weeks/year × years of service × weekly pay
+    //   - 'total':   user enters a single dollar amount directly
+    // The simulation reads the *computed total* either way.
+    severanceAmount: 0,             // total severance dollars (used directly in 'total' mode)
     severancePaymentMonths: 1,      // 1 = lump sum, 6 = stretched over 6 months
+    severanceMode: 'formula',       // 'formula' | 'total' — UI entry mode
+    severanceLumpWeeks: 4,          // baseline weeks regardless of tenure
+    severanceWeeksPerYear: 2,       // bonus weeks per year of service
+    severanceYearsOfService: 5,     // years at current employer
+    severanceAnnualPay: 0,          // annual pay rate for severance calc; 0 = use current income
+    ptoPayout: 0,                   // unused PTO/vacation, paid at separation
     uiWeeklyBenefit: 500,           // unemployment insurance, weekly benefit (US average ~$385, NJ ~$830 max)
     uiMaxWeeks: 26,                 // most states cap at 26 weeks
-    cobraMonthly: 1800,             // COBRA / ACA marketplace replacement health insurance, family
+    cobraMonthly: 1800,             // monthly COBRA premium at full price
+    cobraSubsidyMonths: 0,          // months employer pays COBRA after separation (0 = no subsidy)
+    cobraAfterSubsidy: 'aca',       // after subsidy ends: 'cobra_full' | 'aca' | 'none'
     expenseReductionPct: 0.15,      // typical 15% trim of discretionary spending
     partnerKeepsIncome: true,       // if married, partner's income continues
     partnerIncomePortion: 0.40,     // 40% of household income comes from partner (default)
@@ -3625,6 +3792,11 @@ export default function RetirementReadiness() {
               <NumInput label="Current annual income" value={inp.income} onChange={set('income')} step={5000} />
               <Slider label="Years of expected earnings remaining" value={inp.earningYears} onChange={set('earningYears')} min={0} max={50} step={1} />
               <Slider label="Annual salary growth" value={inp.salaryGrowth} onChange={set('salaryGrowth')} min={0} max={0.08} step={0.005} fmt={(v) => fmtPct(v)} />
+              {inp.married && (
+                <div className="mt-5 pt-4" style={{ borderTop: `1px solid ${T.ruleLight}` }}>
+                  <PartnerEditor inp={inp} set={set} />
+                </div>
+              )}
               <div className="mt-5 pt-4" style={{ borderTop: `1px solid ${T.ruleLight}` }}>
                 <RsuEditor
                   rsu={inp.rsu}
@@ -3761,15 +3933,14 @@ export default function RetirementReadiness() {
           );
 
           // Stress test assumptions, only relevant on Job Loss Runway tab.
-          // Severance, UI, COBRA, expense reduction, gig income, partner income.
+          // Severance breakdown (formula or total), PTO payout, UI, COBRA with
+          // subsidy, expense reduction, gig income, partner income.
           const stressTestSection = (
             <Section icon={Wind} title="Stress test assumptions" defaultOpen={open.stressTest} badge={newBadge}>
               <div className="text-[11px] uppercase tracking-[0.12em] mb-3 mt-1" style={{ color: T.muted, fontWeight: 600 }}>
-                Severance
+                Severance package
               </div>
-              <NumInput label="Severance amount (total)" value={inp.severanceAmount} onChange={set('severanceAmount')} step={5000} />
-              <Slider label="Severance paid over (months)" value={inp.severancePaymentMonths} onChange={set('severancePaymentMonths')} min={1} max={12} step={1}
-                help="1 = lump sum at separation. Some companies stretch over several months." />
+              <SeveranceEditor inp={inp} set={set} />
 
               <div className="text-[11px] uppercase tracking-[0.12em] mb-3 mt-5" style={{ color: T.muted, fontWeight: 600 }}>
                 Unemployment insurance
@@ -3780,10 +3951,9 @@ export default function RetirementReadiness() {
                 help="Most states cap at 26 weeks; some extend in recessions." />
 
               <div className="text-[11px] uppercase tracking-[0.12em] mb-3 mt-5" style={{ color: T.muted, fontWeight: 600 }}>
-                Health insurance replacement
+                Health insurance during runway
               </div>
-              <NumInput label="Monthly COBRA / ACA premium" value={inp.cobraMonthly} onChange={set('cobraMonthly')} step={100}
-                help="Family ACA marketplace ~$1,500-2,200/mo without subsidies. Subsidies available based on reduced income." />
+              <CobraEditor inp={inp} set={set} />
 
               <div className="text-[11px] uppercase tracking-[0.12em] mb-3 mt-5" style={{ color: T.muted, fontWeight: 600 }}>
                 Belt tightening
@@ -3815,8 +3985,17 @@ export default function RetirementReadiness() {
                   </div>
                   <Toggle label="Partner keeps working during job loss" value={inp.partnerKeepsIncome} onChange={set('partnerKeepsIncome')} />
                   {inp.partnerKeepsIncome && (
-                    <Slider label="Partner's share of household income" value={inp.partnerIncomePortion} onChange={set('partnerIncomePortion')} min={0} max={1} step={0.05} fmt={fmtPct}
-                      help="What fraction of household income comes from your partner. Default 40%." />
+                    <div className="mt-3 p-3" style={{ background: T.surfaceWarm, border: `1px solid ${T.ruleLight}` }}>
+                      {(inp.partnerIncome || 0) > 0 ? (
+                        <div style={{ fontSize: 12, lineHeight: 1.55, color: T.inkSoft }}>
+                          Partner income: <strong style={{ color: T.ink }}>${Math.round((inp.partnerIncome || 0)).toLocaleString()}/yr</strong> (≈ ${Math.round((inp.partnerIncome || 0) / 12).toLocaleString()}/mo). Set this in <strong style={{ color: T.ink }}>Income & career</strong> (Retirement tab) if you need to change it.
+                        </div>
+                      ) : (
+                        <div style={{ fontSize: 12, lineHeight: 1.55, color: T.inkSoft }}>
+                          No partner income set. To include partner income during job loss, set <strong style={{ color: T.ink }}>Partner's annual income</strong> in Income & career on the Retirement tab.
+                        </div>
+                      )}
+                    </div>
                   )}
                 </>
               )}
@@ -4819,6 +4998,275 @@ function InheritanceCard({ inheritance, onUpdate, onRemove, currentAge, lifeExpe
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+// ============================================================================
+// PARTNER EDITOR
+// ============================================================================
+// Renders inside About You when "Married / filing jointly" is on. Captures
+// partner's income and optional career timing (retirement age, earning years,
+// salary growth). When these optional fields are left at their defaults (null),
+// the simulation uses the user's equivalents — e.g., partner retires at the
+// same age as the user.
+//
+// Why this exists: before v6, the calculator's `inp.income` field was
+// ambiguous (user or household?) and the runway sim estimated partner income
+// as a percentage. That caused the tax engine and the runway sim to make
+// different assumptions. Splitting partner income as a first-class field
+// eliminates the ambiguity.
+function PartnerEditor({ inp, set }) {
+  const partnerRetAge = inp.partnerRetirementAge ?? inp.retirementAge;
+  const partnerEarnYrs = inp.partnerEarningYears ?? inp.earningYears;
+  const partnerSalGrow = inp.partnerSalaryGrowth ?? inp.salaryGrowth;
+  const householdTotal = (inp.income || 0) + (inp.partnerIncome || 0);
+
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-3">
+        <span style={{
+          fontSize: 11, fontWeight: 600, letterSpacing: '0.15em',
+          textTransform: 'uppercase', color: T.muted
+        }}>
+          Partner's income & career
+        </span>
+      </div>
+      <NumInput
+        label="Partner's annual income"
+        value={inp.partnerIncome}
+        onChange={set('partnerIncome')}
+        step={5000}
+      />
+      <p className="text-[11px] mt-1 mb-3" style={{ color: T.muted, fontStyle: 'italic' }}>
+        Set to 0 if your partner doesn't earn (homemaker, stay-at-home parent, etc.). Used for joint tax brackets and the runway calculation.
+      </p>
+
+      {(inp.partnerIncome || 0) > 0 && (
+        <>
+          <NumInput
+            label="Partner's retirement age (leave 0 to match yours)"
+            value={inp.partnerRetirementAge || 0}
+            onChange={(v) => set('partnerRetirementAge')(v > 0 ? v : null)}
+            prefix=""
+            step={1}
+          />
+          {inp.partnerRetirementAge && inp.partnerRetirementAge !== inp.retirementAge && (
+            <p className="text-[11px] mt-1 mb-3" style={{ color: T.muted, fontStyle: 'italic' }}>
+              Partner retires at <strong style={{ color: T.ink }}>{inp.partnerRetirementAge}</strong>, you retire at <strong style={{ color: T.ink }}>{inp.retirementAge}</strong>.
+            </p>
+          )}
+          {!inp.partnerRetirementAge && (
+            <p className="text-[11px] mt-1 mb-3" style={{ color: T.muted, fontStyle: 'italic' }}>
+              Defaulting to <strong style={{ color: T.ink }}>{inp.retirementAge}</strong> (same as yours).
+            </p>
+          )}
+        </>
+      )}
+
+      {householdTotal > 0 && (
+        <div className="mt-3 mb-3 p-3" style={{ background: T.surfaceWarm, border: `1px solid ${T.ruleLight}` }}>
+          <div style={{ fontSize: 11, color: T.muted, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 6 }}>
+            Total household income
+          </div>
+          <div style={{ fontSize: 13, color: T.ink }}>
+            Your ${Math.round(inp.income || 0).toLocaleString()} + partner's ${Math.round(inp.partnerIncome || 0).toLocaleString()} = <strong>${Math.round(householdTotal).toLocaleString()}</strong>/yr
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================================
+// SEVERANCE EDITOR
+// ============================================================================
+// Two-mode UI for entering severance details. Formula mode walks the user
+// through the typical real-world calculation (lump weeks + weeks per year of
+// service × weekly pay), which is how most severance packages are actually
+// structured. Total mode lets users skip the formula if they already know
+// the dollar amount.
+//
+// PTO payout is a separate field that applies in both modes.
+function SeveranceEditor({ inp, set }) {
+  const mode = inp.severanceMode || 'formula';
+  const annualPay = inp.severanceAnnualPay > 0 ? inp.severanceAnnualPay : (inp.income || 0);
+  const weeklyPay = annualPay / 52;
+  const totalWeeks = (inp.severanceLumpWeeks || 0) + (inp.severanceWeeksPerYear || 0) * (inp.severanceYearsOfService || 0);
+  const computedSeverance = totalWeeks * weeklyPay;
+  const usingDefault = !(inp.severanceAnnualPay > 0);
+
+  return (
+    <div>
+      {/* Mode toggle */}
+      <div className="flex gap-2 mb-4">
+        {[
+          { v: 'formula', label: 'Formula' },
+          { v: 'total', label: 'Total dollars' }
+        ].map(opt => (
+          <button
+            key={opt.v}
+            onClick={() => set('severanceMode')(opt.v)}
+            type="button"
+            style={{
+              flex: 1, padding: '8px 10px',
+              fontFamily: BODY_FONT, fontSize: 12, fontWeight: 600,
+              letterSpacing: '0.05em',
+              cursor: 'pointer',
+              background: mode === opt.v ? T.ink : T.surface,
+              color: mode === opt.v ? T.surface : T.ink,
+              border: `1px solid ${mode === opt.v ? T.ink : T.rule}`,
+              transition: 'all 120ms ease'
+            }}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
+
+      {mode === 'formula' ? (
+        <>
+          <Slider
+            label="Lump weeks (flat baseline)"
+            value={inp.severanceLumpWeeks}
+            onChange={set('severanceLumpWeeks')}
+            min={0}
+            max={26}
+            step={1}
+            help="Flat severance regardless of tenure. Common: 2-8 weeks."
+          />
+          <Slider
+            label="Weeks per year of service"
+            value={inp.severanceWeeksPerYear}
+            onChange={set('severanceWeeksPerYear')}
+            min={0}
+            max={4}
+            step={0.5}
+            help="Additional weeks earned per year at the company. Common: 1-2 weeks."
+          />
+          <Slider
+            label="Years of service"
+            value={inp.severanceYearsOfService}
+            onChange={set('severanceYearsOfService')}
+            min={0}
+            max={40}
+            step={1}
+          />
+          <NumInput
+            label="Annual pay for severance calculation"
+            value={inp.severanceAnnualPay}
+            onChange={set('severanceAnnualPay')}
+            step={5000}
+          />
+          <p className="text-[11px] mt-1 mb-3" style={{ color: T.muted, fontStyle: 'italic' }}>
+            {usingDefault
+              ? <>Defaulting to your current income: <strong style={{ color: T.ink }}>${Math.round(annualPay).toLocaleString()}/yr</strong> (≈ ${Math.round(weeklyPay).toLocaleString()}/week). Set a different value here if severance is calculated off base salary only, or if you had a recent raise.</>
+              : <>Using <strong style={{ color: T.ink }}>${Math.round(annualPay).toLocaleString()}/yr</strong> (≈ ${Math.round(weeklyPay).toLocaleString()}/week). Set to 0 to revert to current income.</>
+            }
+          </p>
+          <div className="mt-3 mb-3 p-3" style={{ background: T.surfaceWarm, border: `1px solid ${T.ruleLight}` }}>
+            <div style={{ fontSize: 11, color: T.muted, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 6 }}>
+              Severance total
+            </div>
+            <div style={{ fontSize: 13, color: T.ink }}>
+              <strong>{totalWeeks}</strong> weeks × <strong>${Math.round(weeklyPay).toLocaleString()}</strong>/week = <strong>${Math.round(computedSeverance).toLocaleString()}</strong>
+            </div>
+          </div>
+        </>
+      ) : (
+        <NumInput
+          label="Severance amount (total)"
+          value={inp.severanceAmount}
+          onChange={set('severanceAmount')}
+          step={5000}
+        />
+      )}
+
+      <Slider
+        label="Severance paid over (months)"
+        value={inp.severancePaymentMonths}
+        onChange={set('severancePaymentMonths')}
+        min={1}
+        max={12}
+        step={1}
+        help="1 = lump sum at separation. Some companies stretch payments over several months."
+      />
+
+      <NumInput
+        label="PTO / vacation payout"
+        value={inp.ptoPayout}
+        onChange={set('ptoPayout')}
+        step={500}
+      />
+      <p className="text-[11px] mt-1 mb-3" style={{ color: T.muted, fontStyle: 'italic' }}>
+        Unused PTO/vacation paid at separation. Required by law in some states (e.g., California). Adds to severance lump sum.
+      </p>
+    </div>
+  );
+}
+
+// ============================================================================
+// COBRA EDITOR
+// ============================================================================
+// Three inputs:
+//   - COBRA monthly premium (what it costs at full price)
+//   - Employer subsidy duration in months (0 = no subsidy)
+//   - Post-subsidy plan: continue COBRA, switch to ACA, or none
+function CobraEditor({ inp, set }) {
+  const choice = inp.cobraAfterSubsidy || 'aca';
+  return (
+    <div>
+      <NumInput
+        label="Monthly COBRA premium (full price)"
+        value={inp.cobraMonthly}
+        onChange={set('cobraMonthly')}
+        step={100}
+      />
+      <p className="text-[11px] mt-1 mb-4" style={{ color: T.muted, fontStyle: 'italic' }}>
+        Full COBRA cost without subsidies. Family plans typically $1,500-2,500/mo; individual $400-800/mo.
+      </p>
+
+      <Slider
+        label="Employer subsidy duration (months)"
+        value={inp.cobraSubsidyMonths}
+        onChange={set('cobraSubsidyMonths')}
+        min={0}
+        max={18}
+        step={1}
+        help="Months the employer covers COBRA after separation as part of severance. Common: 3-6 months. 0 = no subsidy."
+      />
+
+      <div className="mt-3">
+        <div className="text-[11px] mb-2" style={{ color: T.muted, fontWeight: 600, letterSpacing: '0.05em' }}>
+          After subsidy ends
+        </div>
+        <div className="flex flex-col gap-2">
+          {[
+            { v: 'aca', label: 'Switch to ACA marketplace', hint: 'Uses your healthcare cost assumption (Net Worth → Living expenses). Typically cheaper than full COBRA.' },
+            { v: 'cobra_full', label: 'Continue COBRA at full price', hint: 'Pay the full premium until COBRA expires (max 18 months from separation), then switch to ACA.' },
+            { v: 'none', label: 'Covered by spouse or other', hint: 'No ongoing cost. Choose this if your spouse\'s plan, a new employer, or another source will cover you.' }
+          ].map(opt => (
+            <button
+              key={opt.v}
+              onClick={() => set('cobraAfterSubsidy')(opt.v)}
+              type="button"
+              style={{
+                padding: '10px 12px',
+                textAlign: 'left',
+                fontFamily: BODY_FONT,
+                cursor: 'pointer',
+                background: choice === opt.v ? T.surfaceWarm : T.surface,
+                color: T.ink,
+                border: `1px solid ${choice === opt.v ? T.ink : T.rule}`,
+                transition: 'all 120ms ease'
+              }}
+            >
+              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 2 }}>{opt.label}</div>
+              <div style={{ fontSize: 11, color: T.muted, lineHeight: 1.4 }}>{opt.hint}</div>
+            </button>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
@@ -6072,12 +6520,22 @@ function YearAuditDrawer({ year, scenario, onClose, onScenarioChange, currentAge
     : 'Late retirement';
 
   // Income lines
-  // Note: year.salary contains base salary + RSU. We split them for display.
-  // When there's no RSU income, the "Base salary" label reads as just "Salary"
-  // for backward compatibility with the existing user mental model.
+  // The user's salary, partner's salary, and RSU vesting are stored as
+  // separate fields on the trajectory entry. When the household has multiple
+  // earners or RSUs, each gets its own line for clarity. For single-earner
+  // households without RSUs, we fall back to a single "Salary" line that
+  // matches the original mental model.
   const hasRsu = (year.rsuIncome || 0) > 0;
+  const hasPartnerSalary = (year.partnerSalary || 0) > 0;
+  const yourSalary = year.yourSalary ?? (year.baseSalary ? year.baseSalary - (year.partnerSalary || 0) : year.salary);
+  const splitSalaries = hasPartnerSalary || hasRsu;
   const incomes = [
-    { label: hasRsu ? 'Base salary' : 'Salary', value: year.baseSalary ?? year.salary, hint: year.isWorking ? 'From employment' : null },
+    {
+      label: splitSalaries ? 'Your salary' : 'Salary',
+      value: yourSalary,
+      hint: year.isWorking ? 'From employment' : null
+    },
+    { label: "Partner's salary", value: year.partnerSalary || 0, hint: 'From partner\'s employment' },
     { label: 'RSU vesting', value: year.rsuIncome || 0, hint: 'Vested shares × share price, taxed as W-2 income' },
     { label: 'Social Security', value: year.ssIncome, hint: 'Inflation-adjusted from your benefit' },
     { label: 'Other income', value: year.altIncome, hint: 'Pension, part-time, etc.' },
@@ -6361,7 +6819,7 @@ function MonthAuditDrawer({ month, scenario, onClose, onScenarioChange, runways,
     { label: 'Severance', value: monthData.severance, hint: monthData.severance > 0 ? `Month ${monthData.month} of severance schedule` : null },
     { label: 'Unemployment insurance', value: monthData.ui, hint: monthData.ui > 0 ? `Within UI eligibility window` : 'UI exhausted or not eligible' },
     { label: 'Gig / freelance', value: monthData.gig, hint: monthData.gig > 0 ? 'Pre-tax, monthly' : null },
-    { label: 'Partner income', value: monthData.partnerIncome, hint: monthData.partnerIncome > 0 ? `${Math.round((inp.partnerIncomePortion || 0) * 100)}% of household income` : null },
+    { label: 'Partner income', value: monthData.partnerIncome, hint: monthData.partnerIncome > 0 ? `Partner's salary, ~$${Math.round(monthData.partnerIncome).toLocaleString()}/mo` : null },
     { label: 'Rental income (net)', value: monthData.rentalIncome, hint: 'After vacancy & maintenance' },
     { label: 'Other income', value: monthData.altIncome, hint: 'Pension, royalties, etc.' }
   ].filter(i => i.value > 0);

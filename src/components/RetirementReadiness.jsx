@@ -2594,24 +2594,8 @@ export default function RetirementReadiness() {
     // 529 balances are per-child (since they're typically beneficiary-specific) but the return rate
     // is a single shared assumption. 529 funds for a child are pooled across that child's entries
     // (e.g. saving for preschool can pay for college if the K-12 stuff comes out of pocket).
-    children: [
-      {
-        id: 'k1',
-        name: 'First child',
-        c529Balance: 40000,
-        entries: [
-          { id: 'k1-college', type: 'college', parentAgeAtStart: 50, durationYears: 4, annualCost: 40000 }
-        ]
-      },
-      {
-        id: 'k2',
-        name: 'Second child',
-        c529Balance: 20000,
-        entries: [
-          { id: 'k2-college', type: 'college', parentAgeAtStart: 52, durationYears: 4, annualCost: 40000 }
-        ]
-      }
-    ],
+    // Default: no children. Add via Net Worth → Education savings, or Retirement → Children & education.
+    children: [],
     c529Rate: 0.06,
 
     // Savings
@@ -3618,13 +3602,37 @@ export default function RetirementReadiness() {
             >
               {totalChildren === 0 && (
                 <p className="text-[12px] mb-3" style={{ color: T.muted, fontStyle: 'italic' }}>
-                  No 529 plans tracked. To add children, education stages, or 529 balances, switch to the Retirement tab.
+                  No 529 plans tracked. Add a child below to track their 529 balance. To configure education costs and school stages, switch to the Retirement tab.
                 </p>
               )}
               {(inp.children || []).map(child => (
                 <div key={child.id} className="mb-4 pb-4" style={{ borderBottom: `1px solid ${T.ruleLight}` }}>
-                  <div className="text-[11px] uppercase tracking-[0.12em] mb-2" style={{ color: T.muted, fontWeight: 500 }}>
-                    {child.name || 'Child'}
+                  <div className="flex items-center gap-2 mb-2">
+                    <input
+                      type="text"
+                      value={child.name || ''}
+                      onChange={(e) => updateChild(child.id, { name: e.target.value })}
+                      placeholder="Child name"
+                      style={{
+                        flex: 1, padding: '4px 8px', fontSize: 13, fontWeight: 600,
+                        color: T.ink, background: 'transparent',
+                        border: 'none', borderBottom: `1px dashed ${T.muted}`,
+                        outline: 'none', textTransform: 'uppercase', letterSpacing: '0.06em'
+                      }}
+                    />
+                    <button
+                      onClick={() => removeChild(child.id)}
+                      type="button"
+                      aria-label={`Remove ${child.name || 'child'}`}
+                      style={{
+                        background: 'transparent', border: 'none', cursor: 'pointer',
+                        color: T.muted, padding: 4, lineHeight: 1
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.color = T.oxblood}
+                      onMouseLeave={(e) => e.currentTarget.style.color = T.muted}
+                    >
+                      <X size={16} strokeWidth={2} />
+                    </button>
                   </div>
                   <NumInput
                     label="529 balance"
@@ -3634,8 +3642,25 @@ export default function RetirementReadiness() {
                   />
                 </div>
               ))}
+              {/* Add child button — same pattern as Properties / Vehicles / RSU. Education
+                  costs (tuition, durations, school stages) are configured on the
+                  Retirement tab, but the 529 balance itself is a net-worth asset
+                  so adding/managing children should be reachable from here too. */}
+              <button
+                onClick={addChild}
+                type="button"
+                className="w-full py-2 transition-colors hover:bg-gray-100"
+                style={{
+                  background: 'transparent', border: `1px dashed ${T.rule}`,
+                  fontFamily: BODY_FONT, fontSize: 12, fontWeight: 600,
+                  color: T.ink, letterSpacing: '0.05em',
+                  cursor: 'pointer'
+                }}
+              >
+                + {totalChildren === 0 ? 'Add a child' : 'Add another child'}
+              </button>
               {totalChildren > 0 && (
-                <p className="text-[11px] mt-2" style={{ color: T.muted, fontStyle: 'italic' }}>
+                <p className="text-[11px] mt-3" style={{ color: T.muted, fontStyle: 'italic' }}>
                   Education future costs (tuition, durations, school stages) live in the Retirement tab, they affect the long-term projection but not today's net worth.
                 </p>
               )}

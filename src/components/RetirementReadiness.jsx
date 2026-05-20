@@ -68,7 +68,7 @@ const BADGE_NEW_RUN = { label: 'New for runway', color: '#B25E00', bg: '#FBEFD9'
 // migrations from the saved version up to current. If anything required
 // user attention, we log it to a warnings array surfaced as a banner.
 
-const CURRENT_SCHEMA_VERSION = 3;
+const CURRENT_SCHEMA_VERSION = 4;
 
 const APP_VERSION = '1.0';
 
@@ -168,6 +168,20 @@ const MIGRATIONS = {
       inputs.useStateBrackets = !!inputs.stateCode;
     }
     return { inputs, warnings };
+  },
+  // v3 -> v4: RSU support. Each user gets an empty grants list and a default
+  // share price. Until they add a grant, this contributes $0 of RSU income
+  // and behaves exactly like v3.
+  4: (raw) => {
+    const warnings = [];
+    const inputs = { ...raw };
+    if (!inputs.rsu) {
+      inputs.rsu = {
+        currentPrice: 100,
+        grants: []
+      };
+    }
+    return { inputs, warnings };
   }
 };
 
@@ -212,6 +226,82 @@ function migrateScenario(saved) {
 // ============================================================================
 // FINANCIAL CALCULATIONS
 // ============================================================================
+
+// ----- RSU vesting math -----
+// Given a single grant and a target projection year (years from "today"),
+// returns the dollar value of shares vesting in that year, at the current
+// share price.
+//
+// The vesting model has three knobs:
+//   - vestingYears: total years until the grant is fully vested
+//   - cliffMonths: months from grant date before any shares vest. At the
+//     cliff date, a chunk equal to (cliffMonths / 12 / vestingYears) of total
+//     shares vests in one shot. 0 means no cliff (vests start immediately).
+//   - frequency: 'monthly' | 'quarterly' | 'annual' — how often vest events
+//     happen after the cliff date.
+//
+// grantYearOffset: months from "today" the grant was issued. 0 means today;
+// negative numbers mean past grants (e.g., -18 = granted 18 months ago).
+//
+// "Year" here always means projection year 0 = current year, 1 = next year, etc.
+// The vesting math is done in months for precision, then bucketed into years.
+function computeRsuIncome(grant, projectionYearOffset, currentPrice) {
+  if (!grant || !grant.shares || grant.shares <= 0) return 0;
+  if (!currentPrice || currentPrice <= 0) return 0;
+
+  const totalShares = grant.shares;
+  const vestingMonths = (grant.vestingYears || 4) * 12;
+  const cliffMonths = grant.cliffMonths || 0;
+  const frequency = grant.frequency || 'monthly';
+  const grantOffsetMonths = grant.grantYearOffset || 0;  // months from today
+
+  // Months relative to grant date (not relative to today)
+  const monthsAfterGrant = (start) => start - grantOffsetMonths;
+
+  // Map projection year to a months-from-today window
+  const windowStart = projectionYearOffset * 12;
+  const windowEnd = windowStart + 12;
+
+  // Count shares that vest within this window
+  let sharesVesting = 0;
+
+  // Cliff vest: one big chunk at exactly cliffMonths after grant date
+  if (cliffMonths > 0) {
+    const cliffMonthFromToday = grantOffsetMonths + cliffMonths;
+    if (cliffMonthFromToday >= windowStart && cliffMonthFromToday < windowEnd) {
+      // Cliff shares = the portion of total that would have vested up to the cliff
+      // For a 4-year/1-year-cliff plan, this is exactly 25% (12 months / 48 months)
+      sharesVesting += totalShares * (cliffMonths / vestingMonths);
+    }
+  }
+
+  // Post-cliff vest events: every N months until fully vested
+  const periodMonths = frequency === 'monthly' ? 1 : frequency === 'quarterly' ? 3 : 12;
+  const postCliffShares = totalShares - (totalShares * (cliffMonths / vestingMonths));
+  const postCliffMonths = vestingMonths - cliffMonths;
+  const numPeriods = Math.max(1, Math.round(postCliffMonths / periodMonths));
+  const sharesPerPeriod = postCliffShares / numPeriods;
+
+  for (let i = 1; i <= numPeriods; i++) {
+    // Vest event happens at (cliffMonths + i * periodMonths) months after grant
+    const vestMonthFromToday = grantOffsetMonths + cliffMonths + i * periodMonths;
+    if (vestMonthFromToday >= windowStart && vestMonthFromToday < windowEnd) {
+      sharesVesting += sharesPerPeriod;
+    }
+  }
+
+  return sharesVesting * currentPrice;
+}
+
+// Sum RSU income across all grants for a given projection year.
+function computeTotalRsuIncome(rsu, projectionYearOffset) {
+  if (!rsu || !rsu.grants || !rsu.grants.length) return 0;
+  let total = 0;
+  for (const grant of rsu.grants) {
+    total += computeRsuIncome(grant, projectionYearOffset, rsu.currentPrice);
+  }
+  return total;
+}
 
 // 2026 single-filer federal brackets (approx). For married, brackets ~2x.
 const FED_BRACKETS_SINGLE = [
@@ -326,7 +416,7 @@ function simulate(inp, scenario = 'mod') {
       totalAssets: totAssetsNow,
       totalLiabilities: totLiabNow,
       netWorth: totAssetsNow - totLiabNow,
-      grossIncome: 0, salary: 0, ssIncome: 0, altIncome: 0, rentalIncome: 0, inheritance: 0,
+      grossIncome: 0, salary: 0, baseSalary: 0, rsuIncome: 0, ssIncome: 0, altIncome: 0, rentalIncome: 0, inheritance: 0,
       taxes: 0, propertyTax: 0, vehicleLoanPayments: 0, debtPayments: 0, rentPayment: 0,
       livingExpenses: 0, totalSpend: 0, expenses: 0,
       healthcare: 0, college: 0, mortgagePayment: 0, netFlow: 0
@@ -353,6 +443,14 @@ function simulate(inp, scenario = 'mod') {
 
     // ----- Income -----
     let salary = isWorking ? inp.income * Math.pow(1 + inp.salaryGrowth, y) : 0;
+    // RSU income vests on a schedule and is treated as W-2 wages at vest.
+    // Only counted while working — once retired, vesting ends (the employer
+    // wouldn't be granting/holding RSUs for a non-employee).
+    let rsuIncome = isWorking ? computeTotalRsuIncome(inp.rsu, y) : 0;
+    // Add RSU income to salary so it flows through wage growth, FICA, and
+    // income allocation just like base pay. We do NOT inflation-adjust RSU
+    // income — the share price input is assumed flat (no growth model).
+    salary += rsuIncome;
     let ssIncome = age >= inp.ssStartAge ? inp.socialSecurity * infl : 0;
     let altIncome = (age >= inp.altStartAge && age <= inp.altEndAge) ? inp.altIncome * infl : 0;
 
@@ -674,6 +772,12 @@ function simulate(inp, scenario = 'mod') {
       netWorth,
       grossIncome,
       salary,
+      // Track RSU and base salary separately so the audit drawer can show
+      // RSU income as its own line item. `salary` above is the combined
+      // wage figure used for tax computation; `baseSalary` is the wage
+      // component before RSUs.
+      baseSalary: salary - rsuIncome,
+      rsuIncome,
       ssIncome,
       altIncome,
       rentalIncome,
@@ -2311,6 +2415,14 @@ export default function RetirementReadiness() {
     earningYears: 20,
     salaryGrowth: 0.03,
 
+    // RSU grants. Empty by default. When user adds grants, each one is a
+    // structured object: { id, label, shares, grantYearOffset, vestingYears,
+    // cliffMonths, frequency }. See computeRsuIncome for vesting math.
+    rsu: {
+      currentPrice: 100,
+      grants: []
+    },
+
     // Savings allocation: how surplus income is split across accounts.
     // These are percentages (0-1) that should sum to 1.0.
     // 401(k) honors the IRS contribution cap regardless; if that fills up, the overflow
@@ -3514,6 +3626,13 @@ export default function RetirementReadiness() {
               <Slider label="Years of expected earnings remaining" value={inp.earningYears} onChange={set('earningYears')} min={0} max={50} step={1} />
               <Slider label="Annual salary growth" value={inp.salaryGrowth} onChange={set('salaryGrowth')} min={0} max={0.08} step={0.005} fmt={(v) => fmtPct(v)} />
               <div className="mt-5 pt-4" style={{ borderTop: `1px solid ${T.ruleLight}` }}>
+                <RsuEditor
+                  rsu={inp.rsu}
+                  onChange={set('rsu')}
+                  earningYears={inp.earningYears}
+                />
+              </div>
+              <div className="mt-5 pt-4" style={{ borderTop: `1px solid ${T.ruleLight}` }}>
                 <StateTaxPicker
                   stateCode={inp.stateCode}
                   useStateBrackets={inp.useStateBrackets}
@@ -4704,6 +4823,231 @@ function InheritanceCard({ inheritance, onUpdate, onRemove, currentAge, lifeExpe
   );
 }
 
+// ============================================================================
+// RSU EDITOR
+// ============================================================================
+// UI for adding, editing, and removing RSU grants. The editor has two modes:
+//
+//   Empty state: just an "Add RSU grant +" button. Most users have no RSUs,
+//   so the section is unobtrusive when not in use.
+//
+//   Active state: shared "Current share price" input at the top, then a card
+//   for each grant with its fields (label, shares, granted, vesting years,
+//   cliff, frequency), then the "Add another" button below.
+//
+// The summary at the bottom shows projected RSU income for the current year,
+// next year, and over the next 5 years — gives the user immediate feedback
+// that their inputs are doing what they expect.
+function RsuEditor({ rsu, onChange, earningYears }) {
+  const grants = rsu?.grants || [];
+  const currentPrice = rsu?.currentPrice ?? 100;
+
+  const updateRsu = (patch) => onChange({ ...rsu, ...patch });
+  const updatePrice = (newPrice) => updateRsu({ currentPrice: newPrice });
+
+  const addGrant = () => {
+    const newGrant = {
+      id: 'g' + Date.now(),
+      label: `Grant ${grants.length + 1}`,
+      shares: 1000,
+      grantYearOffset: 0,          // months from today; 0 = today
+      vestingYears: 4,
+      cliffMonths: 12,
+      frequency: 'monthly'
+    };
+    updateRsu({ grants: [...grants, newGrant] });
+  };
+
+  const updateGrant = (id, patch) => {
+    updateRsu({ grants: grants.map(g => g.id === id ? { ...g, ...patch } : g) });
+  };
+
+  const removeGrant = (id) => {
+    updateRsu({ grants: grants.filter(g => g.id !== id) });
+  };
+
+  // Compute projected RSU income for summary
+  const thisYearIncome = computeTotalRsuIncome(rsu, 0);
+  const nextYearIncome = computeTotalRsuIncome(rsu, 1);
+  let fiveYearTotal = 0;
+  for (let y = 0; y < 5; y++) fiveYearTotal += computeTotalRsuIncome(rsu, y);
+
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-3">
+        <span style={{
+          fontSize: 11, fontWeight: 600, letterSpacing: '0.15em',
+          textTransform: 'uppercase', color: T.muted
+        }}>
+          RSU grants
+        </span>
+        {grants.length > 0 && (
+          <span style={{
+            fontSize: 11, color: T.muted, fontStyle: 'italic'
+          }}>
+            ({grants.length} {grants.length === 1 ? 'grant' : 'grants'})
+          </span>
+        )}
+      </div>
+
+      {grants.length === 0 ? (
+        <p className="text-[12px] mb-3" style={{ color: T.muted, fontStyle: 'italic' }}>
+          If you receive RSUs from your employer, add each grant here. The calculator will compute vesting income year-by-year and include it as W-2 wages for tax purposes.
+        </p>
+      ) : (
+        <>
+          {/* Shared current share price */}
+          <div className="mb-4">
+            <NumInput
+              label="Current share price"
+              value={currentPrice}
+              onChange={updatePrice}
+              step={5}
+            />
+          </div>
+
+          {/* Grants list */}
+          {grants.map(g => (
+            <RsuGrantCard
+              key={g.id}
+              grant={g}
+              onUpdate={(patch) => updateGrant(g.id, patch)}
+              onRemove={() => removeGrant(g.id)}
+            />
+          ))}
+
+          {/* Summary */}
+          <div className="mt-3 mb-3 p-3" style={{ background: T.surfaceWarm, border: `1px solid ${T.ruleLight}` }}>
+            <div style={{ fontSize: 11, color: T.muted, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 6 }}>
+              Projected RSU income
+            </div>
+            <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', fontSize: 13, color: T.ink }}>
+              <span><strong>${Math.round(thisYearIncome).toLocaleString()}</strong> this year</span>
+              <span style={{ color: T.muted }}>·</span>
+              <span><strong>${Math.round(nextYearIncome).toLocaleString()}</strong> next year</span>
+              <span style={{ color: T.muted }}>·</span>
+              <span><strong>${Math.round(fiveYearTotal).toLocaleString()}</strong> over 5 years</span>
+            </div>
+          </div>
+        </>
+      )}
+
+      <button
+        onClick={addGrant}
+        type="button"
+        className="w-full py-2 transition-colors hover:bg-gray-100"
+        style={{
+          background: 'transparent', border: `1px dashed ${T.rule}`,
+          fontFamily: BODY_FONT, fontSize: 12, fontWeight: 600,
+          color: T.ink, letterSpacing: '0.05em',
+          cursor: 'pointer'
+        }}
+      >
+        + {grants.length === 0 ? 'Add an RSU grant' : 'Add another grant'}
+      </button>
+    </div>
+  );
+}
+
+// Individual grant card. Each card has: label, shares, granted-N-months-ago,
+// vesting years, cliff months, frequency, and a remove button.
+function RsuGrantCard({ grant, onUpdate, onRemove }) {
+  return (
+    <div className="mb-3 p-3" style={{ background: T.surface, border: `1px solid ${T.rule}` }}>
+      <div className="flex items-center gap-2 mb-2">
+        <input
+          type="text"
+          value={grant.label}
+          onChange={(e) => onUpdate({ label: e.target.value })}
+          style={{
+            flex: 1, padding: '4px 8px', fontSize: 14, fontWeight: 600,
+            color: T.ink, background: 'transparent',
+            border: 'none', borderBottom: `1px dashed ${T.muted}`,
+            outline: 'none'
+          }}
+        />
+        <button
+          onClick={onRemove}
+          type="button"
+          aria-label="Remove grant"
+          style={{
+            background: 'transparent', border: 'none', cursor: 'pointer',
+            color: T.muted, padding: 4, lineHeight: 1
+          }}
+          onMouseEnter={(e) => e.currentTarget.style.color = T.oxblood}
+          onMouseLeave={(e) => e.currentTarget.style.color = T.muted}
+        >
+          <X size={16} strokeWidth={2} />
+        </button>
+      </div>
+
+      <NumInput
+        label="Total shares granted"
+        value={grant.shares}
+        onChange={(v) => onUpdate({ shares: v })}
+        prefix=""
+        step={100}
+      />
+
+      <Slider
+        label="Granted (months ago)"
+        value={-grant.grantYearOffset}  // display as positive months ago
+        onChange={(v) => onUpdate({ grantYearOffset: -v })}
+        min={0}
+        max={60}
+        step={1}
+        help="How long ago was this grant issued? Used to determine which shares have already vested vs. are still in the cliff or post-cliff period."
+      />
+
+      <Slider
+        label="Vesting period (years)"
+        value={grant.vestingYears}
+        onChange={(v) => onUpdate({ vestingYears: v })}
+        min={1}
+        max={10}
+        step={1}
+      />
+
+      <Slider
+        label="Cliff (months)"
+        value={grant.cliffMonths}
+        onChange={(v) => onUpdate({ cliffMonths: v })}
+        min={0}
+        max={36}
+        step={1}
+        help="Months from grant date before any shares vest. 0 = no cliff (vests start immediately). 12 is standard."
+      />
+
+      <div className="mt-3">
+        <div className="text-[11px] mb-2" style={{ color: T.muted, fontWeight: 600, letterSpacing: '0.05em' }}>
+          Vesting frequency after cliff
+        </div>
+        <div className="flex gap-2">
+          {['monthly', 'quarterly', 'annual'].map(f => (
+            <button
+              key={f}
+              onClick={() => onUpdate({ frequency: f })}
+              type="button"
+              style={{
+                flex: 1, padding: '8px 10px',
+                fontFamily: BODY_FONT, fontSize: 12, fontWeight: 600,
+                letterSpacing: '0.05em', textTransform: 'capitalize',
+                cursor: 'pointer',
+                background: grant.frequency === f ? T.ink : T.surface,
+                color: grant.frequency === f ? T.surface : T.ink,
+                border: `1px solid ${grant.frequency === f ? T.ink : T.rule}`,
+                transition: 'all 120ms ease'
+              }}
+            >
+              {f}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function SavingsAllocationEditor({ allocation, onChange }) {
   const buckets = [
     { key: 'cash', label: 'Cash', color: T.muted },
@@ -5728,8 +6072,13 @@ function YearAuditDrawer({ year, scenario, onClose, onScenarioChange, currentAge
     : 'Late retirement';
 
   // Income lines
+  // Note: year.salary contains base salary + RSU. We split them for display.
+  // When there's no RSU income, the "Base salary" label reads as just "Salary"
+  // for backward compatibility with the existing user mental model.
+  const hasRsu = (year.rsuIncome || 0) > 0;
   const incomes = [
-    { label: 'Salary', value: year.salary, hint: year.isWorking ? 'From employment' : null },
+    { label: hasRsu ? 'Base salary' : 'Salary', value: year.baseSalary ?? year.salary, hint: year.isWorking ? 'From employment' : null },
+    { label: 'RSU vesting', value: year.rsuIncome || 0, hint: 'Vested shares × share price, taxed as W-2 income' },
     { label: 'Social Security', value: year.ssIncome, hint: 'Inflation-adjusted from your benefit' },
     { label: 'Other income', value: year.altIncome, hint: 'Pension, part-time, etc.' },
     { label: 'Rental income', value: year.rentalIncome, hint: 'Net of vacancy & maintenance' },

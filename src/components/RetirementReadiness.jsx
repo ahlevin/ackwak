@@ -68,7 +68,7 @@ const BADGE_NEW_RUN = { label: 'New for runway', color: '#B25E00', bg: '#FBEFD9'
 // migrations from the saved version up to current. If anything required
 // user attention, we log it to a warnings array surfaced as a banner.
 
-const CURRENT_SCHEMA_VERSION = 6;
+const CURRENT_SCHEMA_VERSION = 7;
 
 const APP_VERSION = '1.0';
 
@@ -240,6 +240,38 @@ const MIGRATIONS = {
       );
     }
     return { inputs, warnings };
+  },
+  // v6 -> v7: RSU grants now store grantMonth + grantYear (calendar date)
+  // instead of grantYearOffset (months from "today"). The benefit: a grant
+  // dated March 2024 stays March 2024 forever, regardless of when the user
+  // reopens the scenario. The months-from-today value used by the math is
+  // computed at calculation time from the current date.
+  // For migration: convert grantYearOffset to a calendar date by anchoring
+  // to today. This is lossy for users who saved the scenario in a different
+  // month than they reopen it, but the off-by-one-month error is negligible
+  // for vesting math.
+  7: (raw) => {
+    const warnings = [];
+    const inputs = { ...raw };
+    if (inputs.rsu && Array.isArray(inputs.rsu.grants)) {
+      const now = new Date();
+      inputs.rsu = {
+        ...inputs.rsu,
+        grants: inputs.rsu.grants.map(g => {
+          // Already has grantMonth/grantYear? Don't touch.
+          if (g.grantMonth && g.grantYear) return g;
+          // Convert grantYearOffset (months from today) into a date
+          const offset = typeof g.grantYearOffset === 'number' ? g.grantYearOffset : 0;
+          const target = new Date(now.getFullYear(), now.getMonth() + offset, 1);
+          return {
+            ...g,
+            grantMonth: target.getMonth() + 1,
+            grantYear: target.getFullYear()
+          };
+        })
+      };
+    }
+    return { inputs, warnings };
   }
 };
 
@@ -347,8 +379,11 @@ function computeCobraCost(inp, monthIndex) {
 //   - frequency: 'monthly' | 'quarterly' | 'annual' — how often vest events
 //     happen after the cliff date.
 //
-// grantYearOffset: months from "today" the grant was issued. 0 means today;
-// negative numbers mean past grants (e.g., -18 = granted 18 months ago).
+// The grant date is stored as grantMonth (1-12) and grantYear. We compute
+// the offset from "today" (in months) at calculation time, so a grant from
+// March 2024 still reads as the correct number of months back even if the
+// scenario is opened months later. A legacy `grantYearOffset` field is
+// supported as a fallback for migrated scenarios.
 //
 // "Year" here always means projection year 0 = current year, 1 = next year, etc.
 // The vesting math is done in months for precision, then bucketed into years.
@@ -360,10 +395,21 @@ function computeRsuIncome(grant, projectionYearOffset, currentPrice) {
   const vestingMonths = (grant.vestingYears || 4) * 12;
   const cliffMonths = grant.cliffMonths || 0;
   const frequency = grant.frequency || 'monthly';
-  const grantOffsetMonths = grant.grantYearOffset || 0;  // months from today
 
-  // Months relative to grant date (not relative to today)
-  const monthsAfterGrant = (start) => start - grantOffsetMonths;
+  // Resolve grant date → months from today.
+  // Prefer grantMonth + grantYear (the new, stable storage). Fall back to
+  // grantYearOffset (the legacy field) if present. Default to 0 (today).
+  let grantOffsetMonths = 0;
+  if (grant.grantYear && grant.grantMonth) {
+    const now = new Date();
+    const grantDate = new Date(grant.grantYear, grant.grantMonth - 1, 1);
+    // months from today's first-of-month. Negative = past, positive = future.
+    const monthsFromToday = (grantDate.getFullYear() - now.getFullYear()) * 12 +
+                            (grantDate.getMonth() - now.getMonth());
+    grantOffsetMonths = monthsFromToday;
+  } else if (typeof grant.grantYearOffset === 'number') {
+    grantOffsetMonths = grant.grantYearOffset;
+  }
 
   // Map projection year to a months-from-today window
   const windowStart = projectionYearOffset * 12;
@@ -5319,11 +5365,13 @@ function RsuEditor({ rsu, onChange, earningYears }) {
   const updatePrice = (newPrice) => updateRsu({ currentPrice: newPrice });
 
   const addGrant = () => {
+    const now = new Date();
     const newGrant = {
       id: 'g' + Date.now(),
       label: `Grant ${grants.length + 1}`,
       shares: 1000,
-      grantYearOffset: 0,          // months from today; 0 = today
+      grantMonth: now.getMonth() + 1,    // 1-12 (Date.getMonth is 0-11)
+      grantYear: now.getFullYear(),
       vestingYears: 4,
       cliffMonths: 12,
       frequency: 'monthly'
@@ -5424,6 +5472,80 @@ function RsuEditor({ rsu, onChange, earningYears }) {
 
 // Individual grant card. Each card has: label, shares, granted-N-months-ago,
 // vesting years, cliff months, frequency, and a remove button.
+// Picker for the grant date — Month dropdown + Year input. The persisted
+// fields are grant.grantMonth (1-12) and grant.grantYear. We display a
+// derived "= N months ago" readout below for context. Stable across time:
+// "March 2024" stays "March 2024" no matter when the user reopens the
+// scenario; the months-ago readout updates automatically.
+function GrantDatePicker({ grant, onUpdate }) {
+  const now = new Date();
+  // Default to today if the grant doesn't have date fields yet (e.g., a
+  // pre-existing scenario being edited; the migration also handles this).
+  const grantMonth = grant.grantMonth || (now.getMonth() + 1);
+  const grantYear = grant.grantYear || now.getFullYear();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth() + 1;
+
+  // Compute months ago (positive = past, negative = future grant date)
+  const monthsFromToday = (grantYear - currentYear) * 12 + (grantMonth - currentMonth);
+  const monthsAgo = -monthsFromToday;
+
+  const MONTHS = [
+    { v: 1, label: 'January' }, { v: 2, label: 'February' }, { v: 3, label: 'March' },
+    { v: 4, label: 'April' }, { v: 5, label: 'May' }, { v: 6, label: 'June' },
+    { v: 7, label: 'July' }, { v: 8, label: 'August' }, { v: 9, label: 'September' },
+    { v: 10, label: 'October' }, { v: 11, label: 'November' }, { v: 12, label: 'December' }
+  ];
+
+  const hint = monthsAgo > 0
+    ? `${monthsAgo} ${monthsAgo === 1 ? 'month' : 'months'} ago`
+    : monthsAgo < 0
+      ? `${-monthsAgo} ${-monthsAgo === 1 ? 'month' : 'months'} in the future`
+      : 'This month';
+
+  return (
+    <div className="mb-3">
+      <div className="text-[11px] mb-2" style={{ color: T.muted, fontWeight: 600, letterSpacing: '0.05em' }}>
+        Grant date
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <select
+          value={grantMonth}
+          onChange={(e) => onUpdate({ grantMonth: parseInt(e.target.value, 10) })}
+          style={{
+            padding: '6px 8px', fontFamily: BODY_FONT, fontSize: 13, color: T.ink,
+            background: T.surface, border: `1px solid ${T.rule}`,
+            cursor: 'pointer', outline: 'none'
+          }}
+        >
+          {MONTHS.map(m => (
+            <option key={m.v} value={m.v}>{m.label}</option>
+          ))}
+        </select>
+        <input
+          type="number"
+          value={grantYear}
+          min={currentYear - 30}
+          max={currentYear + 5}
+          step={1}
+          onChange={(e) => {
+            const v = parseInt(e.target.value, 10);
+            if (!isNaN(v)) onUpdate({ grantYear: v });
+          }}
+          style={{
+            padding: '6px 8px', fontFamily: BODY_FONT, fontSize: 13, color: T.ink,
+            background: T.surface, border: `1px solid ${T.rule}`,
+            outline: 'none'
+          }}
+        />
+      </div>
+      <p className="text-[11px] mt-1.5" style={{ color: T.muted, fontStyle: 'italic' }}>
+        {hint}. Used to determine which shares have already vested.
+      </p>
+    </div>
+  );
+}
+
 function RsuGrantCard({ grant, onUpdate, onRemove }) {
   return (
     <div className="mb-3 p-3" style={{ background: T.surface, border: `1px solid ${T.rule}` }}>
@@ -5462,15 +5584,7 @@ function RsuGrantCard({ grant, onUpdate, onRemove }) {
         step={100}
       />
 
-      <Slider
-        label="Granted (months ago)"
-        value={-grant.grantYearOffset}  // display as positive months ago
-        onChange={(v) => onUpdate({ grantYearOffset: -v })}
-        min={0}
-        max={60}
-        step={1}
-        help="How long ago was this grant issued? Used to determine which shares have already vested vs. are still in the cliff or post-cliff period."
-      />
+      <GrantDatePicker grant={grant} onUpdate={onUpdate} />
 
       <Slider
         label="Vesting period (years)"

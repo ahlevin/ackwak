@@ -1935,7 +1935,7 @@ function NetWorthView({ inp, sims, setActiveView }) {
 
         {/* Stacked bar, assets vs liabilities scaled to a common axis */}
         <div className="mb-2 flex items-baseline justify-between">
-          <span style={{ fontSize: 10, color: T.emerald, fontWeight: 700letterSpacing: '0.12em' }}>Assets</span>
+          <span style={{ fontSize: 10, color: T.emerald, fontWeight: 700, letterSpacing: '0.12em' }}>Assets</span>
           <span style={{ fontFamily: MONO_FONT, fontSize: 11, color: T.ink }}>{fmt$Full(totalAssets)}</span>
         </div>
         <div className="flex mb-5" style={{ height: 14, background: T.ruleLight, overflow: 'hidden' }}>
@@ -1953,7 +1953,7 @@ function NetWorthView({ inp, sims, setActiveView }) {
         </div>
 
         <div className="mb-2 flex items-baseline justify-between">
-          <span style={{ fontSize: 10, color: T.oxblood, fontWeight: 700letterSpacing: '0.12em' }}>Liabilities</span>
+          <span style={{ fontSize: 10, color: T.oxblood, fontWeight: 700, letterSpacing: '0.12em' }}>Liabilities</span>
           <span style={{ fontFamily: MONO_FONT, fontSize: 11, color: T.ink }}>{fmt$Full(totalLiabilities)}</span>
         </div>
         <div className="flex" style={{ height: 14, background: T.ruleLight, overflow: 'hidden' }}>

@@ -1935,7 +1935,7 @@ function NetWorthView({ inp, sims, setActiveView }) {
 
         {/* Stacked bar, assets vs liabilities scaled to a common axis */}
         <div className="mb-2 flex items-baseline justify-between">
-          <span style={{ fontSize: 10, color: T.emerald, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em' }}>Assets</span>
+          <span style={{ fontSize: 10, color: T.emerald, fontWeight: 700letterSpacing: '0.12em' }}>Assets</span>
           <span style={{ fontFamily: MONO_FONT, fontSize: 11, color: T.ink }}>{fmt$Full(totalAssets)}</span>
         </div>
         <div className="flex mb-5" style={{ height: 14, background: T.ruleLight, overflow: 'hidden' }}>
@@ -1953,7 +1953,7 @@ function NetWorthView({ inp, sims, setActiveView }) {
         </div>
 
         <div className="mb-2 flex items-baseline justify-between">
-          <span style={{ fontSize: 10, color: T.oxblood, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em' }}>Liabilities</span>
+          <span style={{ fontSize: 10, color: T.oxblood, fontWeight: 700letterSpacing: '0.12em' }}>Liabilities</span>
           <span style={{ fontFamily: MONO_FONT, fontSize: 11, color: T.ink }}>{fmt$Full(totalLiabilities)}</span>
         </div>
         <div className="flex" style={{ height: 14, background: T.ruleLight, overflow: 'hidden' }}>
@@ -3663,7 +3663,7 @@ export default function RetirementReadiness() {
                         flex: 1, padding: '4px 8px', fontSize: 13, fontWeight: 600,
                         color: T.ink, background: 'transparent',
                         border: 'none', borderBottom: `1px dashed ${T.muted}`,
-                        outline: 'none', textTransform: 'uppercase', letterSpacing: '0.06em'
+                        outline: 'none', letterSpacing: '0.06em'
                       }}
                     />
                     <button
@@ -5098,7 +5098,7 @@ function PartnerEditor({ inp, set }) {
       <div className="flex items-center gap-2 mb-3">
         <span style={{
           fontSize: 11, fontWeight: 600, letterSpacing: '0.15em',
-          textTransform: 'uppercase', color: T.muted
+           color: T.muted
         }}>
           Partner's income & career
         </span>
@@ -5137,7 +5137,7 @@ function PartnerEditor({ inp, set }) {
 
       {householdTotal > 0 && (
         <div className="mt-3 mb-3 p-3" style={{ background: T.surfaceWarm, border: `1px solid ${T.ruleLight}` }}>
-          <div style={{ fontSize: 11, color: T.muted, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 6 }}>
+          <div style={{ fontSize: 11, color: T.muted, fontWeight: 600, letterSpacing: '0.12em',  marginBottom: 6 }}>
             Total household income
           </div>
           <div style={{ fontSize: 13, color: T.ink }}>
@@ -5236,7 +5236,7 @@ function SeveranceEditor({ inp, set }) {
             }
           </p>
           <div className="mt-3 mb-3 p-3" style={{ background: T.surfaceWarm, border: `1px solid ${T.ruleLight}` }}>
-            <div style={{ fontSize: 11, color: T.muted, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 6 }}>
+            <div style={{ fontSize: 11, color: T.muted, fontWeight: 600, letterSpacing: '0.12em',  marginBottom: 6 }}>
               Severance total
             </div>
             <div style={{ fontSize: 13, color: T.ink }}>
@@ -5398,7 +5398,7 @@ function RsuEditor({ rsu, onChange, earningYears }) {
       <div className="flex items-center gap-2 mb-3">
         <span style={{
           fontSize: 11, fontWeight: 600, letterSpacing: '0.15em',
-          textTransform: 'uppercase', color: T.muted
+           color: T.muted
         }}>
           RSU grants
         </span>
@@ -5439,7 +5439,7 @@ function RsuEditor({ rsu, onChange, earningYears }) {
 
           {/* Summary */}
           <div className="mt-3 mb-3 p-3" style={{ background: T.surfaceWarm, border: `1px solid ${T.ruleLight}` }}>
-            <div style={{ fontSize: 11, color: T.muted, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 6 }}>
+            <div style={{ fontSize: 11, color: T.muted, fontWeight: 600, letterSpacing: '0.12em',  marginBottom: 6 }}>
               Projected RSU income
             </div>
             <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', fontSize: 13, color: T.ink }}>
@@ -6486,7 +6486,7 @@ function NetWorthInspector({ snapshot, snapshotNoInh, inheritanceReceived, inspe
             style={{
               background: T.ink, color: T.surface,
               fontFamily: BODY_FONT, fontWeight: 600,
-              fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase',
+              fontSize: 11, letterSpacing: '0.1em', 
               border: 'none', cursor: 'pointer'
             }}
           >
@@ -6938,7 +6938,7 @@ function MonthAuditDrawer({ month, scenario, onClose, onScenarioChange, runways,
                   background: active ? T.ink : 'transparent',
                   color: active ? T.surface : T.muted,
                   fontFamily: BODY_FONT, fontWeight: active ? 700 : 500,
-                  fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase',
+                  fontSize: 11, letterSpacing: '0.1em', 
                   borderLeft: i > 0 ? `1px solid ${T.rule}` : 'none'
                 }}>{meta}</button>
               );
@@ -7067,7 +7067,7 @@ function MonthAuditDrawer({ month, scenario, onClose, onScenarioChange, runways,
                     background: active ? meta.color : 'transparent',
                     color: active ? T.surface : T.muted,
                     fontFamily: BODY_FONT, fontWeight: active ? 700 : 500,
-                    fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase',
+                    fontSize: 11, letterSpacing: '0.1em', 
                     borderLeft: i > 0 ? `1px solid ${T.rule}` : 'none'
                   }}
                 >
@@ -7149,7 +7149,7 @@ function MonthAuditDrawer({ month, scenario, onClose, onScenarioChange, runways,
                 <div className="flex items-center gap-2">
                   <span style={{ fontSize: 12, color: T.ink, fontWeight: 500 }}>{line.label}</span>
                   {line.drawn && (
-                    <span style={{ fontSize: 9, color: T.oxblood, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', background: T.oxbloodSoft, padding: '2px 5px' }}>
+                    <span style={{ fontSize: 9, color: T.oxblood, fontWeight: 700, letterSpacing: '0.1em',  background: T.oxbloodSoft, padding: '2px 5px' }}>
                       Drew this month
                     </span>
                   )}
@@ -7160,7 +7160,7 @@ function MonthAuditDrawer({ month, scenario, onClose, onScenarioChange, runways,
               </div>
             ))}
             <div className="flex items-center justify-between py-3 mt-1" style={{ borderTop: `2px solid ${T.ink}` }}>
-              <span style={{ fontSize: 13, color: T.ink, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Total liquid</span>
+              <span style={{ fontSize: 13, color: T.ink, fontWeight: 700,  letterSpacing: '0.05em' }}>Total liquid</span>
               <span style={{ fontFamily: DISPLAY_FONT, fontSize: 18, color: T.ink, fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>
                 {fmt$Full(totalLiquidEnd)}
               </span>
@@ -7196,7 +7196,7 @@ function Chip({ active, label, tone }) {
     <span style={{
       fontSize: 9, color, background: bg,
       padding: '3px 7px', fontWeight: 600,
-      letterSpacing: '0.08em', textTransform: 'uppercase',
+      letterSpacing: '0.08em', 
       border: `1px solid ${color}40`, opacity: active ? 1 : 0.4
     }}>
       {label}
@@ -7288,7 +7288,7 @@ function MigrationNotice({ notice, onDismiss }) {
             <AlertTriangle size={14} strokeWidth={1.75} style={{ color: accentColor }} />
             <span style={{
               fontSize: 11, fontWeight: 700, color: accentColor,
-              letterSpacing: '0.2em', textTransform: 'uppercase',
+              letterSpacing: '0.2em', 
               fontFamily: BODY_FONT
             }}>
               {isFromFuture ? 'Newer version detected' : 'Scenario upgraded'}
@@ -7325,7 +7325,7 @@ function MigrationNotice({ notice, onDismiss }) {
           }}>
             <div style={{
               fontSize: 10, color: T.muted, fontWeight: 600,
-              letterSpacing: '0.15em', textTransform: 'uppercase',
+              letterSpacing: '0.15em', 
               marginBottom: 10
             }}>
               {isFromFuture ? 'Compatibility notes' : 'What changed'}
@@ -7354,7 +7354,7 @@ function MigrationNotice({ notice, onDismiss }) {
                 background: T.ink, color: T.surface,
                 padding: '10px 18px',
                 fontFamily: BODY_FONT, fontWeight: 600,
-                fontSize: 12, letterSpacing: '0.08em', textTransform: 'uppercase',
+                fontSize: 12, letterSpacing: '0.08em', 
                 cursor: 'pointer', border: 'none'
               }}
             >

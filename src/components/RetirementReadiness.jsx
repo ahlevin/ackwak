@@ -3657,7 +3657,7 @@ export default function RetirementReadiness() {
                     <input
                       type="text"
                       value={child.name || ''}
-                      onChange={(e) => updateChild(child.id, { name: e.target.value })}
+                      onChange={(e) => updateChild(child.id, { ...child, name: e.target.value })}
                       placeholder="Child name"
                       style={{
                         flex: 1, padding: '4px 8px', fontSize: 13, fontWeight: 600,
@@ -3682,8 +3682,8 @@ export default function RetirementReadiness() {
                   </div>
                   <NumInput
                     label="529 balance"
-                    value={child.c529Balance}
-                    onChange={(v) => updateChild(child.id, { c529Balance: v })}
+                    value={child.c529Balance ?? 0}
+                    onChange={(v) => updateChild(child.id, { ...child, c529Balance: v })}
                     step={1000}
                   />
                 </div>

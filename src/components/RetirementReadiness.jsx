@@ -6676,7 +6676,7 @@ function YearAuditDrawer({ year, scenario, onClose, onScenarioChange, currentAge
     },
     { label: "Partner's salary", value: year.partnerSalary || 0, hint: 'From partner\'s employment' },
     { label: 'RSU vesting', value: year.rsuIncome || 0, hint: 'Vested shares × share price, taxed as W-2 income' },
-    { label: 'Social Security', value: year.ssIncome, hint: 'Inflation-adjusted from your benefit' },
+    { label: 'Social Security', value: year.ssIncome, hint: 'From your Social Security statement' },
     { label: 'Other income', value: year.altIncome, hint: 'Pension, part-time, etc.' },
     { label: 'Rental income', value: year.rentalIncome, hint: 'Net of vacancy & maintenance' },
     { label: 'Inheritance received', value: year.inheritance, hint: year.inheritance > 0 ? 'Tax-free, deposited to brokerage' : null }

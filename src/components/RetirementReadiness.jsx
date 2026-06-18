@@ -614,7 +614,7 @@ function simulate(inp, scenario = 'mod') {
     // Combined wage income: user + partner + RSU. This is the figure that
     // flows through FICA, federal/state taxes, and the savings allocation.
     let salary = userSalary + partnerSalary + rsuIncome;
-    let ssIncome = age >= inp.ssStartAge ? inp.socialSecurity * infl : 0;
+    let ssIncome = age >= inp.ssStartAge ? inp.socialSecurity : 0;
     let altIncome = (age >= inp.altStartAge && age <= inp.altEndAge) ? inp.altIncome * infl : 0;
 
     // Properties: collect rental income, pay mortgages, pay property tax, grow values
@@ -3952,7 +3952,7 @@ export default function RetirementReadiness() {
 
           const retirementIncomeSection = (
             <Section icon={Heart} title="Retirement income" defaultOpen={open.retirementIncome} badge={newBadge}>
-              <NumInput label="Social Security, annual" value={inp.socialSecurity} onChange={set('socialSecurity')} step={1000} />
+              <NumInput label="Social Security, annual" help="Enter the annual amount from your Social Security statement (e.g., $4,251/month = $51,012/year)" value={inp.socialSecurity} onChange={set('socialSecurity')} step={1000} />
               <Slider label="Social Security start age" value={inp.ssStartAge} onChange={set('ssStartAge')} min={62} max={70} step={1}
                 help="Delaying to 70 increases benefits by ~8% per year over full retirement age." />
               <NumInput label="Other income (pension, rental, part-time)" value={inp.altIncome} onChange={set('altIncome')} step={1000} />

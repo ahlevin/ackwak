@@ -3714,7 +3714,7 @@ export default function RetirementReadiness() {
           );
 
           const savingsSection = (
-            <Section icon={PiggyBank} title="Current savings & investments" defaultOpen={open.savings} badge={sharedBadge}>
+            <Section icon={PiggyBank} title="Savings & investments" defaultOpen={open.savings} badge={sharedBadge}>
               <NumInput label="Cash (checking, no interest)" value={inp.cash} onChange={set('cash')} />
               <div className="grid grid-cols-2 gap-4">
                 <NumInput label="Money market value" value={inp.moneyMarket} onChange={set('moneyMarket')} />

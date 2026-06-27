@@ -246,7 +246,7 @@ function renderIncomeAndSavings(inp) {
     <h3>Current income</h3>
     <table class="dl">
       <tr><td>Annual income (gross)</td><td>${fmt$(inp.income)}</td></tr>
-      <tr><td>Annual income growth</td><td>${fmtPct(inp.incomeGrowth)}</td></tr>
+      <tr><td>Annual income growth</td><td>${fmtPct(inp.salaryGrowth)}</td></tr>
       <tr><td>Earning years remaining</td><td>${fmtAge(inp.earningYears)}</td></tr>
     </table>
     <h3>Retirement income</h3>
@@ -254,7 +254,6 @@ function renderIncomeAndSavings(inp) {
       <tr><td>Social Security (annual)</td><td>${fmt$(inp.socialSecurity)}</td></tr>
       <tr><td>Social Security start age</td><td>${fmtAge(inp.ssStartAge)}</td></tr>
       <tr><td>Other income (annual)</td><td>${fmt$(inp.altIncome)}</td></tr>
-      <tr><td>Other income growth</td><td>${fmtPct(inp.altIncomeGrowth)}</td></tr>
       <tr><td>Other income age range</td><td>${fmtAge(inp.altStartAge)} to ${fmtAge(inp.altEndAge)}</td></tr>
     </table>
     <h3>Current balances</h3>

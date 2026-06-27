@@ -11,7 +11,7 @@
 
 import * as XLSX from 'xlsx';
 
-const FORMAT_VERSION = '1.0';
+const FORMAT_VERSION = '1.1';
 
 // Format helpers
 const fmtMoney = (n) => (n == null || isNaN(n)) ? '' : Number(n);
@@ -61,6 +61,7 @@ export function exportToExcel(inp, sims, scenarioName) {
     ['Sheets'],
     ['About You', 'Personal info: age, retirement age, life expectancy, marital status, state'],
     ['Income & Savings', 'Salary, retirement income, allocation across cash/MM/CD/brokerage/401k'],
+    ['RSU Grants', 'Equity compensation: shared share price and per-grant vesting schedules'],
     ['Properties', 'All real estate: primary, rentals, vacation homes'],
     ['Vehicles', 'Owned and leased vehicles'],
     ['Debts', 'Credit cards, student loans, personal loans'],
@@ -70,6 +71,7 @@ export function exportToExcel(inp, sims, scenarioName) {
     ['Inheritances', 'Expected lump sums at specified ages'],
     ['Rent & Expenses', 'Rent payments, living expenses, healthcare'],
     ['Assumptions', 'Investment returns, inflation, tax rates'],
+    ['Job Loss & Runway', 'Stress-test inputs: severance, unemployment, COBRA, gig income'],
     ['Projected Results', 'Three-scenario summary (Conservative, Moderate, Optimistic)'],
     ['Year-by-Year', 'Full year-by-year projection from current age to life expectancy']
   ], { firstColWidth: 28, secondColWidth: 60, titleRow: true });
@@ -81,7 +83,9 @@ export function exportToExcel(inp, sims, scenarioName) {
     ['Retirement age', fmtAge(inp.retirementAge), 'Year salary stops, retirement income kicks in'],
     ['Life expectancy', fmtAge(inp.lifeExpectancy), 'Year simulation ends'],
     ['Married', fmtBool(inp.married), 'Affects tax brackets'],
-    ['State income tax rate', fmtPct(inp.stateRate), '% (already converted from decimal)']
+    ['State income tax rate', fmtPct(inp.stateRate), '% (already converted from decimal)'],
+    ['State code (e.g. CA, NY)', inp.stateCode || '', 'Blank = use the manual state tax rate above'],
+    ['Use state tax brackets (true/false)', inp.useStateBrackets ? 'true' : 'false', 'If true, run the state bracket engine instead of the flat rate']
   ], { firstColWidth: 28, secondColWidth: 16, headerRow: true });
 
   // ---------- Income & Savings ----------
@@ -90,14 +94,17 @@ export function exportToExcel(inp, sims, scenarioName) {
     ['CURRENT INCOME', '', ''],
     ['Field', 'Value', 'Notes'],
     ['Annual income (gross)', fmtMoney(inp.income), 'Pre-tax W-2 / self-employment'],
-    ['Annual income growth', fmtPct(inp.incomeGrowth), '% per year'],
+    ['Annual income growth', fmtPct(inp.salaryGrowth), '% per year'],
     ['Earning years remaining', fmtAge(inp.earningYears), 'Often = retirementAge - currentAge'],
+    ['Partner annual income', fmtMoney(inp.partnerIncome ?? 0), '0 = no partner income'],
+    ['Partner retirement age (blank = same as yours)', inp.partnerRetirementAge == null ? '' : fmtAge(inp.partnerRetirementAge), ''],
+    ['Partner earning years (blank = same as yours)', inp.partnerEarningYears == null ? '' : fmtAge(inp.partnerEarningYears), ''],
+    ['Partner salary growth % (blank = same as yours)', inp.partnerSalaryGrowth == null ? '' : fmtPct(inp.partnerSalaryGrowth), '% per year'],
     [],
     ['RETIREMENT INCOME', '', ''],
     ['Social Security (annual)', fmtMoney(inp.socialSecurity), 'Pre-tax'],
     ['Social Security start age', fmtAge(inp.ssStartAge), '62 to 70 (typically)'],
     ['Other income (annual)', fmtMoney(inp.altIncome), 'Pension, part-time, royalties'],
-    ['Other income growth', fmtPct(inp.altIncomeGrowth), '%'],
     ['Other income start age', fmtAge(inp.altStartAge), ''],
     ['Other income end age', fmtAge(inp.altEndAge), ''],
     [],
@@ -120,6 +127,29 @@ export function exportToExcel(inp, sims, scenarioName) {
     ['401(k) / IRA', fmtPct(a.k401), '%'],
     ['Total', fmtPct((a.cash || 0) + (a.mm || 0) + (a.cd || 0) + (a.brokerage || 0) + (a.k401 || 0)), 'Should equal 100%']
   ], { firstColWidth: 36, secondColWidth: 16 });
+
+  // ---------- RSU Grants ----------
+  // Row 1 carries the shared current share price; the grant table follows.
+  // The grant `id` is intentionally omitted — ids are regenerated on import.
+  const rsu = inp.rsu || {};
+  const rsuRows = [
+    ['Current share price', fmtMoney(rsu.currentPrice ?? 100)],
+    ['Grant label', 'Shares', 'Grant month (1-12)', 'Grant year', 'Vesting years', 'Cliff months', 'Frequency (monthly/quarterly/annual)']
+  ];
+  for (const g of (rsu.grants || [])) {
+    rsuRows.push([
+      g.label || '',
+      fmtMoney(g.shares),
+      fmtAge(g.grantMonth),
+      fmtAge(g.grantYear),
+      fmtAge(g.vestingYears),
+      fmtAge(g.cliffMonths),
+      g.frequency || ''
+    ]);
+  }
+  // Always leave one empty data row so the structure is visible to offline editors.
+  if ((rsu.grants || []).length === 0) rsuRows.push(['', '', '', '', '', '', '']);
+  addSheet(wb, 'RSU Grants', rsuRows, { headerRow: true, autoColWidth: true });
 
   // ---------- Properties ----------
   const propRows = [['Label', 'Type', 'Value', 'Mortgage balance', 'Mortgage rate (%)', 'Monthly payment', 'Appreciation (%)', 'Property tax rate (%)', 'Net rental income (annual)', 'Rental growth (%)', 'Rental starts at age', 'Rental ends at age']];
@@ -241,12 +271,38 @@ export function exportToExcel(inp, sims, scenarioName) {
     ['CD rate', fmtPct(inp.cdRate), '% per year'],
     ['Brokerage return', fmtPct(inp.brokerageRate), '% per year'],
     ['401(k) return', fmtPct(inp.k401Rate), '% per year'],
+    ['Tap home equity when liquid runs out (true/false)', inp.useHomeEquity ? 'true' : 'false', 'If true, draw on home equity once liquid assets are exhausted'],
     [],
     ['SCENARIO ADJUSTMENTS', '', ''],
     ['Conservative', '', 'Returns -2 pts, expenses +12%, life +3 yrs'],
     ['Moderate', '', 'Your inputs as entered'],
     ['Optimistic', '', 'Returns +2 pts, expenses -8%, life -3 yrs']
   ], { firstColWidth: 30, secondColWidth: 16 });
+
+  // ---------- Job Loss & Runway ----------
+  // Flat key/value sheet for the stress-test inputs. partnerIncomePortion is a
+  // deprecated legacy field (replaced by partnerIncome) and is intentionally omitted.
+  addSheet(wb, 'Job Loss & Runway', [
+    ['Field', 'Value'],
+    ['Severance mode (formula | total)', inp.severanceMode ?? 'formula'],
+    ['Severance lump weeks', fmtMoney(inp.severanceLumpWeeks)],
+    ['Severance weeks per year of service', fmtMoney(inp.severanceWeeksPerYear)],
+    ['Severance years of service', fmtMoney(inp.severanceYearsOfService)],
+    ['Severance annual pay (blank = use current income)', fmtMoney(inp.severanceAnnualPay)],
+    ['Severance total (used in total mode)', fmtMoney(inp.severanceAmount)],
+    ['Severance paid over (months)', fmtMoney(inp.severancePaymentMonths)],
+    ['PTO / vacation payout', fmtMoney(inp.ptoPayout)],
+    ['Unemployment weekly benefit', fmtMoney(inp.uiWeeklyBenefit)],
+    ['Unemployment max weeks', fmtMoney(inp.uiMaxWeeks)],
+    ['COBRA monthly premium', fmtMoney(inp.cobraMonthly)],
+    ['COBRA subsidy months', fmtMoney(inp.cobraSubsidyMonths)],
+    ['COBRA after subsidy (cobra_full | aca | none)', inp.cobraAfterSubsidy ?? 'aca'],
+    ['Expense reduction %', fmtPct(inp.expenseReductionPct)],
+    ['Partner keeps income during job loss (true/false)', inp.partnerKeepsIncome ? 'true' : 'false'],
+    ['Gig monthly income', fmtMoney(inp.gigMonthlyIncome)],
+    ['Gig start month', fmtMoney(inp.gigStartMonth)],
+    ['Gig end month', fmtMoney(inp.gigEndMonth)]
+  ], { firstColWidth: 48, secondColWidth: 18, headerRow: true });
 
   // ---------- Projected Results ----------
   if (sims) {
@@ -395,6 +451,13 @@ function parseWorkbook(wb) {
     return num(v);
   };
   const yesNo = (v) => v === 'Yes' || v === true || String(v).toLowerCase() === 'yes';
+  // Tolerant boolean: accept true/false/yes/no case-insensitively; otherwise default.
+  const boolVal = (v, dflt) => {
+    const s = (v == null ? '' : String(v)).trim().toLowerCase();
+    if (s === 'true' || s === 'yes') return true;
+    if (s === 'false' || s === 'no') return false;
+    return dflt;
+  };
 
   // About You
   {
@@ -404,18 +467,35 @@ function parseWorkbook(wb) {
     inputs.lifeExpectancy = num(findValue(rows, 'Life expectancy'));
     inputs.married = yesNo(findValue(rows, 'Married'));
     inputs.stateRate = pct(findValue(rows, 'State income tax rate'));
+    // Rows absent in old 1.0 files (findValue → undefined) → leave unset for migration.
+    const stateCodeCell = findValue(rows, 'State code (e.g. CA, NY)');
+    if (stateCodeCell !== undefined && String(stateCodeCell).trim() !== '') inputs.stateCode = String(stateCodeCell).trim().toUpperCase();
+    const useBracketsCell = findValue(rows, 'Use state tax brackets (true/false)');
+    if (useBracketsCell !== undefined) inputs.useStateBrackets = boolVal(useBracketsCell, false);
   }
 
   // Income & Savings
   {
     const rows = getRows('Income & Savings');
     inputs.income = num(findValue(rows, 'Annual income (gross)'));
-    inputs.incomeGrowth = pct(findValue(rows, 'Annual income growth'));
+    inputs.salaryGrowth = pct(findValue(rows, 'Annual income growth'));
     inputs.earningYears = num(findValue(rows, 'Earning years remaining'));
+
+    // Partner income. findValue returns undefined when the row is ABSENT
+    // (old 1.0 files) — leave the field unset so migration backfills it.
+    // A present-but-blank cell reads as '' (sheet_to_json defval) and means
+    // null ("same as user"), which must NOT collapse to 0.
+    const partnerIncomeCell = findValue(rows, 'Partner annual income');
+    if (partnerIncomeCell !== undefined) inputs.partnerIncome = num(partnerIncomeCell) ?? 0;
+    const partnerRetAgeCell = findValue(rows, 'Partner retirement age (blank = same as yours)');
+    if (partnerRetAgeCell !== undefined) inputs.partnerRetirementAge = (partnerRetAgeCell === '' || partnerRetAgeCell == null) ? null : (num(partnerRetAgeCell) ?? null);
+    const partnerEarnYearsCell = findValue(rows, 'Partner earning years (blank = same as yours)');
+    if (partnerEarnYearsCell !== undefined) inputs.partnerEarningYears = (partnerEarnYearsCell === '' || partnerEarnYearsCell == null) ? null : (num(partnerEarnYearsCell) ?? null);
+    const partnerGrowthCell = findValue(rows, 'Partner salary growth % (blank = same as yours)');
+    if (partnerGrowthCell !== undefined) inputs.partnerSalaryGrowth = (partnerGrowthCell === '' || partnerGrowthCell == null) ? null : (pct(partnerGrowthCell) ?? null);
     inputs.socialSecurity = num(findValue(rows, 'Social Security (annual)'));
     inputs.ssStartAge = num(findValue(rows, 'Social Security start age'));
     inputs.altIncome = num(findValue(rows, 'Other income (annual)'));
-    inputs.altIncomeGrowth = pct(findValue(rows, 'Other income growth'));
     inputs.altStartAge = num(findValue(rows, 'Other income start age'));
     inputs.altEndAge = num(findValue(rows, 'Other income end age'));
     inputs.cash = num(findValue(rows, 'Cash'));
@@ -436,6 +516,36 @@ function parseWorkbook(wb) {
       brokerage: pct(findValueAfterHeader(rows, 'SAVINGS ALLOCATION (% of surplus income)', 'Brokerage')) ?? 0.30,
       k401: pct(findValueAfterHeader(rows, 'SAVINGS ALLOCATION (% of surplus income)', '401(k) / IRA')) ?? 0.50
     };
+  }
+
+  // RSU Grants
+  // Absent in old 1.0 files — in that case leave inputs.rsu unset so the
+  // migration framework fills in defaults. Only set it when the sheet exists.
+  {
+    const rows = getRows('RSU Grants');
+    if (rows.length > 0) {
+      const currentPrice = num(findValue(rows, 'Current share price')) ?? 100;
+      // The grant table follows the header row; locate it, then read data rows.
+      let headerIdx = rows.findIndex(r => r[0] && String(r[0]).trim().toLowerCase() === 'grant label');
+      if (headerIdx === -1) headerIdx = 0;
+      const grants = [];
+      for (let i = headerIdx + 1; i < rows.length; i++) {
+        const r = rows[i];
+        // Skip blank rows: a grant must have a shares value.
+        if (r[1] === '' || r[1] == null) continue;
+        grants.push({
+          id: 'g' + (Date.now() + i),
+          label: r[0] || '',
+          shares: num(r[1]) ?? 0,
+          grantMonth: num(r[2]) ?? 1,
+          grantYear: num(r[3]) ?? 0,
+          vestingYears: num(r[4]) ?? 4,
+          cliffMonths: num(r[5]) ?? 0,
+          frequency: r[6] || 'monthly'
+        });
+      }
+      inputs.rsu = { currentPrice, grants };
+    }
   }
 
   // Properties
@@ -589,6 +699,55 @@ function parseWorkbook(wb) {
     if (inflation !== undefined) inputs.inflation = inflation;
     const c529Rate = pct(findValue(rows, '529 expected return'));
     if (c529Rate !== undefined) inputs.c529Rate = c529Rate;
+    // Row absent in old 1.0 files → leave unset for migration.
+    const useHomeEquityCell = findValue(rows, 'Tap home equity when liquid runs out (true/false)');
+    if (useHomeEquityCell !== undefined) inputs.useHomeEquity = boolVal(useHomeEquityCell, false);
+  }
+
+  // Job Loss & Runway
+  // Sheet absent in old 1.0 files → getRows returns [] → leave every field unset
+  // so migration backfills them. Never crash on a missing sheet.
+  {
+    const rows = getRows('Job Loss & Runway');
+    if (rows.length > 0) {
+      // Enum: trim/lowercase and validate against the allowed set; otherwise default.
+      const enumVal = (v, allowed, dflt) => {
+        const s = (v == null ? '' : String(v)).trim().toLowerCase();
+        return allowed.includes(s) ? s : dflt;
+      };
+      // Number/percent setters that respect the absent-row rule (findValue
+      // returns undefined when the label is missing → leave the field unset).
+      const setNum = (key, label, dflt) => {
+        const cell = findValue(rows, label);
+        if (cell !== undefined) inputs[key] = num(cell) ?? dflt;
+      };
+      const setPct = (key, label, dflt) => {
+        const cell = findValue(rows, label);
+        if (cell !== undefined) inputs[key] = pct(cell) ?? dflt;
+      };
+
+      const sevModeCell = findValue(rows, 'Severance mode (formula | total)');
+      if (sevModeCell !== undefined) inputs.severanceMode = enumVal(sevModeCell, ['formula', 'total'], 'formula');
+      setNum('severanceLumpWeeks', 'Severance lump weeks', 4);
+      setNum('severanceWeeksPerYear', 'Severance weeks per year of service', 2);
+      setNum('severanceYearsOfService', 'Severance years of service', 5);
+      setNum('severanceAnnualPay', 'Severance annual pay (blank = use current income)', 0);
+      setNum('severanceAmount', 'Severance total (used in total mode)', 0);
+      setNum('severancePaymentMonths', 'Severance paid over (months)', 1);
+      setNum('ptoPayout', 'PTO / vacation payout', 0);
+      setNum('uiWeeklyBenefit', 'Unemployment weekly benefit', 500);
+      setNum('uiMaxWeeks', 'Unemployment max weeks', 26);
+      setNum('cobraMonthly', 'COBRA monthly premium', 1800);
+      setNum('cobraSubsidyMonths', 'COBRA subsidy months', 0);
+      const cobraAfterCell = findValue(rows, 'COBRA after subsidy (cobra_full | aca | none)');
+      if (cobraAfterCell !== undefined) inputs.cobraAfterSubsidy = enumVal(cobraAfterCell, ['cobra_full', 'aca', 'none'], 'aca');
+      setPct('expenseReductionPct', 'Expense reduction %', 0.15);
+      const pkiCell = findValue(rows, 'Partner keeps income during job loss (true/false)');
+      if (pkiCell !== undefined) inputs.partnerKeepsIncome = boolVal(pkiCell, true);
+      setNum('gigMonthlyIncome', 'Gig monthly income', 0);
+      setNum('gigStartMonth', 'Gig start month', 0);
+      setNum('gigEndMonth', 'Gig end month', 0);
+    }
   }
 
   // Strip undefined values so they fall through to defaults during merge

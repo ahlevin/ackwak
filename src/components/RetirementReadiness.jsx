@@ -3899,7 +3899,7 @@ export default function RetirementReadiness() {
           );
 
           const expensesSection = (
-            <Section icon={Receipt} title="Living expenses & healthcare" defaultOpen={open.expenses} badge={newBadge}>
+            <Section icon={Receipt} title="Expenses & healthcare" defaultOpen={open.expenses} badge={newBadge}>
               <NumInput label="Annual non-mortgage expenses" value={inp.annualExpenses} onChange={set('annualExpenses')} step={2500} />
               <NumInput label="Healthcare per year, before Medicare" value={inp.hcPreMedicare} onChange={set('hcPreMedicare')} step={1000} />
               <NumInput label="Healthcare per year, on Medicare" value={inp.hcMedicare} onChange={set('hcMedicare')} step={500} />
